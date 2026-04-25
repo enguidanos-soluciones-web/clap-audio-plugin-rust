@@ -8,6 +8,8 @@ git checkout tags/1.2.7
 git submodule add -b main https://github.com/sdatkinson/NeuralAmpModelerCore.git external/neural-amp-modeler-0.5.1
 cd external/neural-amp-modeler-0.5.1
 git checkout tags/v0.5.1
+
+git submodule update --init --recursive
 ```
 
 ### Compile
@@ -15,16 +17,11 @@ git checkout tags/v0.5.1
 ```bash
 # Compilar
 just build
-
-# Output (macOS: bundle, Linux/Windows: archivo plano)
-# -> build/Release/clap-gain.clap/        (macOS bundle)
-# -> build/Release/clap-gain.clap         (Linux/Windows)
-# -> build/Release/libSDL3.dylib|.so|.dll (junto al plugin)
 ```
 
 ### Validate plugin
 
 ```bash
-clap-validator validate build/Release/nam-player.clap
-clap-info build/Release/nam-player.clap
+clap-validator validate X
+clap-info X
 ```
