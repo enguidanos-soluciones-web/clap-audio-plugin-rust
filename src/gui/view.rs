@@ -1,5 +1,7 @@
+use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
 use blitz_html::HtmlDocument;
+use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
 use vello::Scene;
 
@@ -29,7 +31,6 @@ impl Gui {
 
         doc.resolve(0.0);
 
-        // TODO: What are doing here??
         let widgets: Vec<Box<dyn Widget>> = vec![Box::new(InputGainKnob), Box::new(OutputGainKnob)];
 
         Self {
@@ -53,8 +54,22 @@ impl Gui {
 
     pub fn render(&mut self, scene: &mut Scene, values: &[f32; PARAMS_COUNT]) {
         self.doc.resolve(0.0);
-        self.element_at_pointer = None;
 
+        let viewport = self.doc.viewport();
+        {
+            let mut painter = VelloScenePainter::new(scene);
+            paint_scene(
+                &mut painter,
+                &*self.doc,
+                viewport.scale_f64(),
+                viewport.window_size.0,
+                viewport.window_size.1,
+                0,
+                0,
+            );
+        }
+
+        self.element_at_pointer = None;
         let (px, py) = self.pointer;
 
         for widget in &self.widgets {
