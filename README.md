@@ -1,5 +1,3 @@
-### In LINUX avoid Flatpack for REAPER installation.
-
 ### Add versioned external C libs
 
 ```bash
@@ -10,10 +8,6 @@ git checkout tags/1.2.7
 git submodule add -b main https://github.com/sdatkinson/NeuralAmpModelerCore.git external/neural-amp-modeler-0.5.1
 cd external/neural-amp-modeler-0.5.1
 git checkout tags/v0.5.1
-
-git submodule add -b release-3.4.x https://github.com/libsdl-org/SDL external/sdl-3.4.4
-cd external/sdl-3.4.4
-git checkout tags/release-3.4.4
 ```
 
 ### Compile
