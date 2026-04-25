@@ -40,6 +40,12 @@ pub struct ParameterClickable<'a, T, R> {
 }
 
 impl<T> Parameter<T, Range> {
+    /// Maps `value` from `[min, max]` to `[0.0, 1.0]`.
+    ///
+    /// Used to convert a raw parameter value (e.g. `-12.0 dB`) into the
+    /// normalised form expected by renderers and gesture handlers, where
+    /// `0.0` represents `min` and `1.0` represents `max`. Out-of-range
+    /// inputs are clamped.
     pub fn normalize(&self, value: f64) -> f64 {
         ((value - self.behave.min) / (self.behave.max - self.behave.min)).clamp(0.0, 1.0)
     }

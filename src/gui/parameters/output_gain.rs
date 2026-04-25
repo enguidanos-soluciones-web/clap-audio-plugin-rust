@@ -5,8 +5,6 @@ use crate::gui::parameter::{
 #[derive(Clone, Copy)]
 pub struct OutputGain;
 
-pub const OUTPUT_GAIN_ID: usize = Parameter::<OutputGain, Range>::ID;
-
 impl Parameter<OutputGain, Range> {
     pub const ID: usize = 1;
 

@@ -9,7 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 arc-swap = "1.9.1"
 baseview = { git = "https://github.com/RustAudio/baseview" }
-taffy = "0.10.1"
+blitz-dom = { git = "https://github.com/DioxusLabs/blitz", default-features = false, features = ["system_fonts"] }
+blitz-html = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
+blitz-traits = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 cxx = "1.0.194"
 pollster = "0.4.0"
 raw-window-handle = "0.5"
