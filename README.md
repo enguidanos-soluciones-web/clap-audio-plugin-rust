@@ -1,5 +1,3 @@
-### Add versioned external C libs
-
 ```bash
 git submodule add -b main https://github.com/free-audio/clap external/clap-1.2.7
 cd external/clap-1.2.7
