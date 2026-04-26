@@ -5,36 +5,19 @@ use crate::{
     gui::parameters::any::PARAMS_COUNT,
     nam, plugin,
     processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
+    state::PluginState,
 };
-use arc_swap::ArcSwap;
 use std::{
     ffi::{CStr, c_char, c_void},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 const MODEL_JSON: &str = include_str!("../models/amp_drive.nam");
 
-#[derive(Default, Clone, Copy)]
-pub struct PluginParameters {
-    pub audio_thread_parameters: [f32; PARAMS_COUNT],
-    pub main_thread_parameters: [f32; PARAMS_COUNT],
-    pub audio_thread_parameters_changed: [bool; PARAMS_COUNT],
-    pub main_thread_parameters_changed: [bool; PARAMS_COUNT],
-}
-
 pub struct Plugin {
-    pub inner: clap_plugin_t,
-    pub host: *const clap_host_t,
+    pub class: clap_plugin_t,
     pub sample_rate: f64,
-    pub model: Option<cxx::UniquePtr<nam::ffi::NamDsp>>,
-    pub input_buf: Vec<f64>,
-    pub output_buf: Vec<f64>,
-    pub parameters_rx: Arc<ArcSwap<PluginParameters>>,
-    pub parameters_wx: Arc<Mutex<PluginParameters>>,
-    pub gui_window: Option<baseview::WindowHandle>,
-    pub gui_width: u32,
-    pub gui_height: u32,
-    pub model_sample_rate: f64,
+    pub state: PluginState,
 }
 
 pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
@@ -60,7 +43,7 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
 
     let mut anychanged = false;
 
-    if let Ok(mut params) = plugin_ref.parameters_wx.try_lock() {
+    if let Ok(mut params) = plugin_ref.state.parameters_wx.try_lock() {
         for n in 0..PARAMS_COUNT {
             let mut information = unsafe { std::mem::zeroed::<clap_param_info_t>() };
 
@@ -74,7 +57,7 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
         }
 
         if anychanged {
-            plugin_ref.parameters_rx.store(Arc::new(*params));
+            plugin_ref.state.parameters_rx.store(Arc::new(*params));
         }
     }
 
@@ -90,15 +73,15 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let plugin = unsafe { (*plugin).plugin_data as *mut Plugin };
     let plugin_ref = unsafe { plugin.as_mut_unchecked() };
 
-    plugin_ref.sample_rate = sample_rate;
-    plugin_ref.input_buf = vec![0.0f64; max_frames_count as usize];
-    plugin_ref.output_buf = vec![0.0f64; max_frames_count as usize];
+    plugin_ref.state.conversion_input_buf = vec![0.0f64; max_frames_count as usize];
+    plugin_ref.state.conversion_output_buf = vec![0.0f64; max_frames_count as usize];
 
-    plugin_ref.model_sample_rate = nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
+    plugin_ref.sample_rate = sample_rate;
 
     let mut model = nam::ffi::dsp_load(MODEL_JSON);
     nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
-    plugin_ref.model = Some(model);
+    plugin_ref.state.nam_model = Some(model);
+    plugin_ref.state.nam_model_sample_rate = nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
 
     true
 }
@@ -115,8 +98,12 @@ pub unsafe extern "C" fn reset(plugin: *const clap_plugin) {
     let plugin = unsafe { (*plugin).plugin_data as *mut Plugin };
     let plugin_ref = unsafe { plugin.as_mut_unchecked() };
 
-    if let Some(model) = plugin_ref.model.as_mut() {
-        nam::ffi::dsp_reset(model.pin_mut(), plugin_ref.sample_rate, plugin_ref.input_buf.len() as i32);
+    if let Some(model) = plugin_ref.state.nam_model.as_mut() {
+        nam::ffi::dsp_reset(
+            model.pin_mut(),
+            plugin_ref.sample_rate,
+            plugin_ref.state.conversion_input_buf.len() as i32,
+        );
     }
 }
 

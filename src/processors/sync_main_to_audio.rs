@@ -2,7 +2,7 @@ use crate::{clap::*, gui::parameters::any::PARAMS_COUNT, plugin::Plugin};
 use std::sync::Arc;
 
 pub unsafe extern "C" fn sync_main_to_audio(plugin: &mut Plugin, out: *const clap_output_events_t) {
-    if let Ok(mut params) = plugin.parameters_wx.try_lock() {
+    if let Ok(mut params) = plugin.state.parameters_wx.try_lock() {
         let mut anychanged = false;
 
         for n in 0..PARAMS_COUNT {
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn sync_main_to_audio(plugin: &mut Plugin, out: *const cla
         }
 
         if anychanged {
-            plugin.parameters_rx.store(Arc::new(*params));
+            plugin.state.parameters_rx.store(Arc::new(*params));
         }
     }
 }

@@ -38,24 +38,15 @@ unsafe extern "C" fn create_plugin(
     }
 
     let plugin = Box::new(Plugin {
-        inner: PLUGIN_CLASS,
-        host,
-        sample_rate: 0.,
-        model: None,
-        input_buf: Vec::new(),
-        output_buf: Vec::new(),
-        parameters_rx: Default::default(),
-        parameters_wx: Default::default(),
-        gui_window: None,
-        gui_width: 600,
-        gui_height: 400,
-        model_sample_rate: 0.0,
+        class: PLUGIN_CLASS,
+        sample_rate: 0.0,
+        state: Default::default(),
     });
 
     let raw = Box::into_raw(plugin);
 
     unsafe {
-        (*raw).inner.plugin_data = raw as *mut c_void;
-        &(*raw).inner as *const clap_plugin
+        (*raw).class.plugin_data = raw as *mut c_void;
+        &(*raw).class as *const clap_plugin
     }
 }

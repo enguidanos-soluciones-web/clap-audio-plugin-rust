@@ -1,12 +1,10 @@
-use std::sync::{Arc, Mutex};
-
-use arc_swap::ArcSwap;
 use baseview::{Size, Window, WindowOpenOptions, WindowScalePolicy};
+use std::sync::Arc;
 
 use crate::{
     clap::*,
-    gui::{platform::make_parent_window, window_handler::GuiWindowHandler},
-    plugin::{Plugin, PluginParameters},
+    gui::{platform::make_parent_window, window_handler::WindowHandler},
+    plugin::Plugin,
 };
 
 pub static GUI_EXT: clap_plugin_gui_t = clap_plugin_gui {
@@ -83,8 +81,8 @@ pub unsafe extern "C" fn create(_plugin: *const clap_plugin_t, _api: *const std:
 }
 
 pub unsafe extern "C" fn destroy(plugin: *const clap_plugin_t) {
-    let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    p.gui_window = None;
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
+    plugin_ref.state.gui_window = None;
 }
 
 pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -> bool {
@@ -92,9 +90,9 @@ pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -
 }
 
 pub unsafe extern "C" fn get_size(plugin: *const clap_plugin_t, width: *mut u32, height: *mut u32) -> bool {
-    let p = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
-    unsafe { *width = p.gui_width };
-    unsafe { *height = p.gui_height };
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+    unsafe { *width = plugin_ref.state.gui_width };
+    unsafe { *height = plugin_ref.state.gui_height };
     true
 }
 
@@ -117,33 +115,35 @@ pub unsafe extern "C" fn adjust_size(_plugin: *const clap_plugin_t, _width: *mut
 }
 
 pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, height: u32) -> bool {
-    let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    p.gui_width = width;
-    p.gui_height = height;
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
+    plugin_ref.state.gui_width = width;
+    plugin_ref.state.gui_height = height;
     true
 }
 
 pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const clap_window_t) -> bool {
-    let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
-    let parent = unsafe { make_parent_window(window) };
-    let width = p.gui_width;
-    let height = p.gui_height;
-    let model_sample_rate = p.model_sample_rate;
-    let parameters_rx: Arc<ArcSwap<PluginParameters>> = Arc::clone(&p.parameters_rx);
-    let parameters_wx: Arc<Mutex<PluginParameters>> = Arc::clone(&p.parameters_wx);
+    let raw_parent_window = unsafe { make_parent_window(window) };
+
+    let width = plugin_ref.state.gui_width;
+    let height = plugin_ref.state.gui_height;
+
+    let parameters_rx = Arc::clone(&plugin_ref.state.parameters_rx);
+    let parameters_wx = Arc::clone(&plugin_ref.state.parameters_wx);
 
     let handle = Window::open_parented(
-        &parent,
+        &raw_parent_window,
         WindowOpenOptions {
             title: "NAM Player".to_string(),
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },
-        move |_window| GuiWindowHandler::new(width, height, model_sample_rate, parameters_rx, parameters_wx),
+        move |_window| WindowHandler::new(width, height, parameters_rx, parameters_wx),
     );
 
-    p.gui_window = Some(handle);
+    plugin_ref.state.gui_window = Some(handle);
+
     true
 }
 

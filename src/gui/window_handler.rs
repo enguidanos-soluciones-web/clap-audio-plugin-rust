@@ -4,18 +4,18 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler};
+use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
 use vello::{Scene, kurbo::Affine};
 
 use crate::{
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::GUIView},
-    plugin::PluginParameters,
+    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::View},
+    state::PluginParameters,
 };
 
-pub struct GuiWindowHandler {
+pub struct WindowHandler {
     gpu: Option<Gpu>,
-    gui: GUIView,
+    gui: View,
 
     parameters_rx: Arc<ArcSwap<PluginParameters>>,
     parameters_wx: Arc<Mutex<PluginParameters>>,
@@ -29,17 +29,16 @@ pub struct GuiWindowHandler {
     scale: f64,
 }
 
-impl GuiWindowHandler {
+impl WindowHandler {
     pub fn new(
         width: u32,
         height: u32,
-        model_sample_rate: f64,
         parameters_rx: Arc<ArcSwap<PluginParameters>>,
         parameters_wx: Arc<Mutex<PluginParameters>>,
     ) -> Self {
         Self {
             gpu: None,
-            gui: GUIView::new(width as f32, height as f32, model_sample_rate),
+            gui: View::new(width as f32, height as f32),
             parameters_rx,
             parameters_wx,
             cursor_pos: baseview::Point::new(0.0, 0.0),
@@ -52,7 +51,7 @@ impl GuiWindowHandler {
     }
 }
 
-impl WindowHandler for GuiWindowHandler {
+impl BaseWindowHandlers for WindowHandler {
     fn on_frame(&mut self, _window: &mut Window) {
         let gpu = match self.gpu.as_mut() {
             Some(g) => g,
@@ -61,6 +60,26 @@ impl WindowHandler for GuiWindowHandler {
 
         let params = self.parameters_rx.load();
 
+        // Resolve the display value for each parameter.
+        //
+        // Two authoritative sources can diverge at any moment:
+        //
+        //   main_thread_parameters   — written by the UI (user dragging a knob).
+        //                              Flagged with `main_thread_parameters_changed[i] = true`
+        //                              until sync_main_to_audio() propagates it to the audio
+        //                              thread on the next process() cycle.
+        //
+        //   audio_thread_parameters  — written by the audio thread, either when it flushes
+        //                              a pending UI change, or directly via host automation /
+        //                              MIDI with no UI involvement.
+        //
+        // Rule: prefer main_thread when the user has a pending change (changed[i] == true)
+        // so the knob tracks the drag in real time. Otherwise defer to audio_thread, which
+        // is the source of truth for host automation and parameter recall.
+        //
+        // WARNING: do not simplify this to always read one side.
+        //   - Always audio  → knob freezes while dragging (lags one process() cycle behind).
+        //   - Always main   → host automation and preset recall are never shown in the UI.
         let values: [f32; PARAMS_COUNT] = std::array::from_fn(|i| {
             if params.main_thread_parameters_changed[i] {
                 params.main_thread_parameters[i]
@@ -77,7 +96,6 @@ impl WindowHandler for GuiWindowHandler {
 
         let mut scene = Scene::new();
         scene.append(&gui_scene, Some(Affine::scale(self.scale)));
-
         gpu.render(&scene, self.width, self.height);
     }
 
@@ -116,13 +134,18 @@ impl WindowHandler for GuiWindowHandler {
                 self.cursor_last_click = Some((now, index));
 
                 let params = self.parameters_rx.load();
-                let raw_value = if params.main_thread_parameters_changed[index] {
+
+                // Same source-of-truth rule as in on_frame: if the UI has a pending
+                // change for this parameter, use it as the drag start value so the
+                // drag begins from where the knob visually is, not from a stale
+                // audio-thread value that hasn't been acknowledged yet.
+                let value = if params.main_thread_parameters_changed[index] {
                     params.main_thread_parameters[index]
                 } else {
                     params.audio_thread_parameters[index]
                 };
 
-                self.cursor_drag = ActiveDrag::from_index(index, x, y, raw_value);
+                self.cursor_drag = ActiveDrag::from_index(index, x, y, value);
 
                 EventStatus::Captured
             }

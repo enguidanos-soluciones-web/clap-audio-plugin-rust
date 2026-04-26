@@ -56,6 +56,17 @@
                 gap: 40px;
             }
 
+            /*
+             * .knob elements are visually empty divs — they have no HTML content.
+             * Their only purpose is to act as layout placeholders so the CSS engine
+             * can compute a position and size for each widget inside the document flow.
+             *
+             * In Rust, `get_client_bounding_rect()` reads the rect produced here.
+             * Vello then uses those pixel coords to draw the actual knob graphic.
+             *
+             * Without explicit width/height the div collapses to 0×0 (no content
+             * to expand it), which means the knob would be drawn at zero size.
+             */
             .knob {
                 width: 80px;
                 height: 80px;

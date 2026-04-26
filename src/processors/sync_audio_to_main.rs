@@ -5,7 +5,7 @@ use std::sync::Arc;
 pub unsafe extern "C" fn sync_audio_to_main(plugin: &mut Plugin) -> bool {
     let mut anychanged = false;
 
-    if let Ok(mut params) = plugin.parameters_wx.try_lock() {
+    if let Ok(mut params) = plugin.state.parameters_wx.try_lock() {
         for n in 0..PARAMS_COUNT {
             if params.audio_thread_parameters_changed[n] {
                 params.audio_thread_parameters_changed[n] = false;
@@ -16,7 +16,7 @@ pub unsafe extern "C" fn sync_audio_to_main(plugin: &mut Plugin) -> bool {
         }
 
         if anychanged {
-            plugin.parameters_rx.store(Arc::new(*params));
+            plugin.state.parameters_rx.store(Arc::new(*params));
         }
     }
 

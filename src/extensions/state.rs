@@ -13,7 +13,7 @@ pub extern "C" fn save(plugin: *const clap_plugin_t, stream: *const clap_ostream
 
     unsafe { sync_audio_to_main(plugin_ref) };
 
-    let Ok(mut params) = plugin_ref.parameters_wx.try_lock() else {
+    let Ok(mut params) = plugin_ref.state.parameters_wx.try_lock() else {
         return false;
     };
 
@@ -26,7 +26,7 @@ pub extern "C" fn save(plugin: *const clap_plugin_t, stream: *const clap_ostream
     let bytes_write = unsafe {
         write(
             stream,
-            plugin_ref.parameters_rx.load().main_thread_parameters.as_ptr() as *const c_void,
+            plugin_ref.state.parameters_rx.load().main_thread_parameters.as_ptr() as *const c_void,
             (std::mem::size_of::<f32>() * PARAMS_COUNT) as u64,
         ) as usize
     };
@@ -38,7 +38,7 @@ pub extern "C" fn save(plugin: *const clap_plugin_t, stream: *const clap_ostream
             params.main_thread_parameters_changed[n] = true;
         }
 
-        plugin_ref.parameters_rx.store(Arc::new(*params));
+        plugin_ref.state.parameters_rx.store(Arc::new(*params));
     }
 
     success
@@ -53,7 +53,7 @@ pub extern "C" fn load(plugin: *const clap_plugin_t, stream: *const clap_istream
         return false;
     };
 
-    let Ok(mut params) = plugin_ref.parameters_wx.try_lock() else {
+    let Ok(mut params) = plugin_ref.state.parameters_wx.try_lock() else {
         return false;
     };
 
@@ -71,7 +71,7 @@ pub extern "C" fn load(plugin: *const clap_plugin_t, stream: *const clap_istream
             params.main_thread_parameters_changed[n] = true;
         }
 
-        plugin_ref.parameters_rx.store(Arc::new(*params));
+        plugin_ref.state.parameters_rx.store(Arc::new(*params));
     }
 
     success

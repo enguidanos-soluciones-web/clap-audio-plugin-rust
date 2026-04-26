@@ -59,7 +59,7 @@ pub extern "C" fn get_value(plugin: *const clap_plugin_t, id: clap_id, value: *m
     }
 
     let value_ref = unsafe { value.as_mut_unchecked() };
-    let params = plugin_ref.parameters_rx.load();
+    let params = plugin_ref.state.parameters_rx.load();
 
     *value_ref = if params.main_thread_parameters_changed[id as usize] {
         params.main_thread_parameters[id as usize] as f64
