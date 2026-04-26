@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                background: #1a1a2e;
+                color: #e0e0e0;
+                font-family: "Courier New", monospace;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                gap: 2rem;
+                user-select: none;
+            }
+            h1 {
+                font-size: 1em;
+                color: #7aa2f7;
+                letter-spacing: 0.3em;
+            }
+            .params {
+                display: flex;
+                gap: 4rem;
+            }
+            .param {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0.8rem;
+            }
+            .param-label {
+                font-size: 0.7em;
+                color: #9aa5ce;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+            }
+            .param-value {
+                font-size: 0.95em;
+                color: #c0caf5;
+                min-width: 7ch;
+                text-align: center;
+            }
+            input[type="range"] {
+                -webkit-appearance: none;
+                width: 180px;
+                height: 4px;
+                background: #364a82;
+                border-radius: 2px;
+                outline: none;
+                cursor: pointer;
+            }
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 16px;
+                height: 16px;
+                background: #7aa2f7;
+                border-radius: 50%;
+                cursor: pointer;
+            }
+            input[type="range"]::-webkit-slider-thumb:hover {
+                background: #89b4fa;
+            }
+            .model-info {
+                font-size: 0.65em;
+                color: #565f89;
+                letter-spacing: 0.08em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>NAM PLAYER</h1>
+        <span class="model-info" id="model-info" style="display:none"></span>
+        <div class="params">
+            <div class="param">
+                <span class="param-label">Input Gain</span>
+                <input
+                    type="range"
+                    id="input_gain"
+                    min="-20"
+                    max="20"
+                    step="0.1"
+                    value="0"
+                />
+                <span class="param-value" id="input_gain_val">+0.0 dB</span>
+            </div>
+            <div class="param">
+                <span class="param-label">Output Gain</span>
+                <input
+                    type="range"
+                    id="output_gain"
+                    min="-20"
+                    max="20"
+                    step="0.1"
+                    value="0"
+                />
+                <span class="param-value" id="output_gain_val">+0.0 dB</span>
+            </div>
+        </div>
+        <script>
+            var PARAM_IDS = ["input_gain", "output_gain"];
+
+            function fmt(v) {
+                var n = parseFloat(v);
+                return (n >= 0 ? "+" : "") + n.toFixed(1) + " dB";
+            }
+
+            function sendParam(idx, value) {
+                window.ipc.postMessage(JSON.stringify({ id: idx, value: value }));
+            }
+
+            PARAM_IDS.forEach(function (id, idx) {
+                var el = document.getElementById(id);
+                var val = document.getElementById(id + "_val");
+                el.addEventListener("input", function () {
+                    val.textContent = fmt(el.value);
+                    sendParam(idx, parseFloat(el.value));
+                });
+                el.addEventListener("dblclick", function () {
+                    el.value = 0;
+                    val.textContent = fmt(0);
+                    sendParam(idx, 0);
+                });
+            });
+
+            window.__setModelRate = function (hz) {
+                var el = document.getElementById("model-info");
+                if (el) {
+                    el.textContent = "Model rate: " + hz + " Hz";
+                    el.style.display = "";
+                }
+            };
+
+            window.__setParam = function (idx, value) {
+                if (idx >= 0 && idx < PARAM_IDS.length) {
+                    var el = document.getElementById(PARAM_IDS[idx]);
+                    var val = document.getElementById(PARAM_IDS[idx] + "_val");
+                    if (el) {
+                        el.value = value;
+                        val.textContent = fmt(value);
+                    }
+                }
+            };
+
+            window.__setParamBatch = function (pairs) {
+                pairs.forEach(function (p) {
+                    window.__setParam(p.id, p.value);
+                });
+            };
+        </script>
+    </body>
+</html>

@@ -1,10 +1,12 @@
 use crate::{
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
+    gui::state::GUIState,
+    nam::state::NAMState,
     plugin::{PLUGIN_CLASS, Plugin},
     version::clap_version_is_compatible,
 };
-use std::ffi::{CStr, c_char, c_void};
+use std::{ffi::{CStr, c_char, c_void}, sync::Mutex};
 
 pub static PLUGIN_FACTORY: clap_plugin_factory_t = clap_plugin_factory {
     get_plugin_count: Some(get_plugin_count),
@@ -39,19 +41,14 @@ unsafe extern "C" fn create_plugin(
 
     let plugin = Box::new(Plugin {
         inner: PLUGIN_CLASS,
-        host,
         sample_rate: 0.,
-        model: None,
-        input_buf: Vec::new(),
-        output_buf: Vec::new(),
+        nam: NAMState { model: None },
+        input_conv_buf: Vec::new(),
+        output_conv_buf: Vec::new(),
         parameters_rx: Default::default(),
         parameters_wx: Default::default(),
         #[cfg(any(target_os = "windows", target_os = "macos"))]
-        gui_window: None,
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        gui_width: 600,
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        gui_height: 400,
+        gui: GUIState { window: None, width: 600, height: 400, message_queue: Mutex::new(Vec::new()) },
     });
 
     let raw = Box::into_raw(plugin);

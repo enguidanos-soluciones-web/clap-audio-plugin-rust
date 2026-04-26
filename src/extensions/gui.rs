@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use arc_swap::ArcSwap;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle, WindowHandle};
 use wry::{
     Rect, WebViewBuilder,
@@ -8,98 +9,49 @@ use wry::{
 
 use crate::{
     clap::*,
-    parameters::any::PARAMS_COUNT,
     plugin::{Plugin, PluginParameters},
+    processors::{
+        handle_ui_event::handle_ui_event,
+        send_ui_event::{GUIRequest, send_ui_event},
+    },
 };
 
-const GUI_HTML: &str = r#"<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: #1a1a2e;
-  color: #e0e0e0;
-  font-family: 'Courier New', monospace;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  gap: 2rem;
-  user-select: none;
-}
-h1 { font-size: 1em; color: #7aa2f7; letter-spacing: 0.3em; }
-.params { display: flex; gap: 4rem; }
-.param { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; }
-.param-label { font-size: 0.7em; color: #9aa5ce; text-transform: uppercase; letter-spacing: 0.12em; }
-.param-value { font-size: 0.95em; color: #c0caf5; min-width: 7ch; text-align: center; }
-input[type=range] {
-  -webkit-appearance: none;
-  width: 180px;
-  height: 4px;
-  background: #364a82;
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  background: #7aa2f7;
-  border-radius: 50%;
-  cursor: pointer;
-}
-input[type=range]::-webkit-slider-thumb:hover { background: #89b4fa; }
-</style>
-</head>
-<body>
-<h1>NAM PLAYER</h1>
-<div class="params">
-  <div class="param">
-    <span class="param-label">Input Gain</span>
-    <input type="range" id="input_gain" min="-20" max="20" step="0.1" value="0">
-    <span class="param-value" id="input_gain_val">+0.0 dB</span>
-  </div>
-  <div class="param">
-    <span class="param-label">Output Gain</span>
-    <input type="range" id="output_gain" min="-20" max="20" step="0.1" value="0">
-    <span class="param-value" id="output_gain_val">+0.0 dB</span>
-  </div>
-</div>
-<script>
-var PARAM_IDS = ['input_gain', 'output_gain'];
+#[cfg(target_os = "windows")]
+struct HostWindow(std::num::NonZeroIsize);
 
-function fmt(v) {
-  var n = parseFloat(v);
-  return (n >= 0 ? '+' : '') + n.toFixed(1) + ' dB';
-}
-
-PARAM_IDS.forEach(function(id, idx) {
-  var el = document.getElementById(id);
-  var val = document.getElementById(id + '_val');
-  el.addEventListener('input', function() {
-    val.textContent = fmt(el.value);
-    window.ipc.postMessage(JSON.stringify({ id: idx, value: parseFloat(el.value) }));
-  });
-});
-
-window.__setParam = function(idx, value) {
-  if (idx >= 0 && idx < PARAM_IDS.length) {
-    var id = PARAM_IDS[idx];
-    var el = document.getElementById(id);
-    var val = document.getElementById(id + '_val');
-    if (el) {
-      el.value = value;
-      val.textContent = fmt(value);
+#[cfg(target_os = "windows")]
+impl HasWindowHandle for HostWindow {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
+        use raw_window_handle::Win32WindowHandle;
+        Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(self.0))) })
     }
-  }
-};
-</script>
-</body>
-</html>"#;
+}
+
+#[cfg(target_os = "macos")]
+struct HostWindow(std::ptr::NonNull<std::ffi::c_void>);
+
+#[cfg(target_os = "macos")]
+impl HasWindowHandle for HostWindow {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
+        use raw_window_handle::AppKitWindowHandle;
+        Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(self.0))) })
+    }
+}
+
+unsafe fn host_window_from_clap(window: *const clap_window_t) -> Option<HostWindow> {
+    #[cfg(target_os = "windows")]
+    {
+        let hwnd = unsafe { (*window).__bindgen_anon_1.win32 } as isize;
+        std::num::NonZeroIsize::new(hwnd).map(HostWindow)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let cocoa = unsafe { (*window).__bindgen_anon_1.cocoa };
+        std::ptr::NonNull::new(cocoa as *mut std::ffi::c_void).map(HostWindow)
+    }
+}
+
+const GUI_HTML: &str = include_str!("../gui/entry.html");
 
 pub static GUI_EXT: clap_plugin_gui_t = clap_plugin_gui {
     is_api_supported: Some(is_api_supported),
@@ -154,7 +106,7 @@ pub unsafe extern "C" fn create(_plugin: *const clap_plugin_t, _api: *const std:
 
 pub unsafe extern "C" fn destroy(plugin: *const clap_plugin_t) {
     let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    p.gui_window = None;
+    p.gui.window = None;
 }
 
 pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -> bool {
@@ -163,8 +115,8 @@ pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -
 
 pub unsafe extern "C" fn get_size(plugin: *const clap_plugin_t, width: *mut u32, height: *mut u32) -> bool {
     let p = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
-    unsafe { *width = p.gui_width };
-    unsafe { *height = p.gui_height };
+    unsafe { *width = p.gui.width };
+    unsafe { *height = p.gui.height };
     true
 }
 
@@ -188,9 +140,9 @@ pub unsafe extern "C" fn adjust_size(_plugin: *const clap_plugin_t, _width: *mut
 
 pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, height: u32) -> bool {
     let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    p.gui_width = width;
-    p.gui_height = height;
-    if let Some(wv) = &p.gui_window {
+    p.gui.width = width;
+    p.gui.height = height;
+    if let Some(wv) = &p.gui.window {
         let _ = wv.set_bounds(Rect {
             position: LogicalPosition::new(0u32, 0u32).into(),
             size: LogicalSize::new(width, height).into(),
@@ -200,79 +152,50 @@ pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, heig
 }
 
 pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const clap_window_t) -> bool {
-    let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    let params_wx: Arc<Mutex<PluginParameters>> = Arc::clone(&p.parameters_wx);
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
+
+    let params_rx: Arc<ArcSwap<PluginParameters>> = Arc::clone(&plugin_ref.parameters_rx);
+    let params_wx: Arc<Mutex<PluginParameters>> = Arc::clone(&plugin_ref.parameters_wx);
+
+    let parent = match unsafe { host_window_from_clap(window) } {
+        Some(host_window) => host_window,
+        None => return false,
+    };
 
     let builder = WebViewBuilder::new()
         .with_html(GUI_HTML)
         .with_bounds(Rect {
             position: LogicalPosition::new(0u32, 0u32).into(),
-            size: LogicalSize::new(p.gui_width, p.gui_height).into(),
+            size: LogicalSize::new(plugin_ref.gui.width, plugin_ref.gui.height).into(),
         })
         .with_ipc_handler(move |request| {
-            let body = request.body();
-            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(body) {
-                if let (Some(id), Some(value)) = (msg.get("id").and_then(|v| v.as_u64()), msg.get("value").and_then(|v| v.as_f64())) {
-                    if let Ok(mut params) = params_wx.lock() {
-                        let idx = id as usize;
-                        if idx < PARAMS_COUNT {
-                            params.main_thread_parameters[idx] = value as f32;
-                            params.main_thread_parameters_changed[idx] = true;
-                        }
-                    }
-                }
-            }
+            handle_ui_event(&params_rx, &params_wx, request.body());
         });
 
-    #[cfg(target_os = "windows")]
-    {
-        use raw_window_handle::Win32WindowHandle;
+    if let Ok(webview) = builder.build_as_child(&parent) {
+        if let Ok(mut queue) = plugin_ref.gui.message_queue.lock() {
+            queue.push(GUIRequest::ParamValueBatch(
+                plugin_ref
+                    .parameters_rx
+                    .load()
+                    .main_thread_parameters
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| (index, *value as f64))
+                    .collect::<Vec<(usize, f64)>>(),
+            ));
 
-        struct HostHwnd(std::num::NonZeroIsize);
-        impl HasWindowHandle for HostHwnd {
-            fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
-                Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(self.0))) })
+            for msg in queue.drain(..) {
+                send_ui_event(&webview, msg);
             }
         }
 
-        let hwnd = unsafe { (*window).__bindgen_anon_1.win32 } as isize;
-        let parent = match std::num::NonZeroIsize::new(hwnd) {
-            Some(n) => HostHwnd(n),
-            None => return false,
-        };
-        return match builder.build_as_child(&parent) {
-            Ok(wv) => {
-                p.gui_window = Some(wv);
-                true
-            }
-            Err(_) => false,
-        };
+        plugin_ref.gui.window = Some(webview);
+
+        return true;
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        use raw_window_handle::AppKitWindowHandle;
-
-        struct HostNsView(std::ptr::NonNull<std::ffi::c_void>);
-        impl HasWindowHandle for HostNsView {
-            fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
-                Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(self.0))) })
-            }
-        }
-
-        let cocoa = unsafe { (*window).__bindgen_anon_1.cocoa };
-        let parent = match std::ptr::NonNull::new(cocoa as *mut std::ffi::c_void) {
-            Some(nn) => HostNsView(nn),
-            None => return false,
-        };
-        return match builder.build_as_child(&parent) {
-            Ok(wv) => {
-                p.gui_window = Some(wv);
-                true
-            }
-            Err(_) => false,
-        };
-    }
+    false
 }
 
 pub unsafe extern "C" fn set_transient(_plugin: *const clap_plugin_t, _window: *const clap_window_t) -> bool {

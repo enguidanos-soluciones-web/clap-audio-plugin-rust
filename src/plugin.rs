@@ -1,23 +1,27 @@
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use crate::extensions::gui::GUI_EXT;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use crate::gui::state::GUIState;
+use crate::nam::state::NAMState;
 use crate::{
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
-    extensions::{
-        audio_ports::AUDIO_PORTS_EXT,
-        parameters::PARAMETERS_EXT,
-        state::STATE_EXT,
-    },
+    extensions::{audio_ports::AUDIO_PORTS_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
+    nam,
     parameters::any::PARAMS_COUNT,
-    nam, plugin,
-    processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
+    plugin,
+    processors::{
+        handle_clap_event::handle_clap_event,
+        render_audio::render_audio,
+        send_ui_event::{GUIRequest, send_ui_event},
+        sync_main_to_audio::sync_main_to_audio,
+    },
 };
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-use crate::extensions::gui::GUI_EXT;
 use arc_swap::ArcSwap;
 use std::{
     ffi::{CStr, c_char, c_void},
     sync::{Arc, Mutex},
 };
-
 
 const MODEL_JSON: &str = include_str!("../models/amp_drive.nam");
 
@@ -31,19 +35,17 @@ pub struct PluginParameters {
 
 pub struct Plugin {
     pub inner: clap_plugin_t,
-    pub host: *const clap_host_t,
     pub sample_rate: f64,
-    pub model: Option<cxx::UniquePtr<nam::ffi::NamDsp>>,
-    pub input_buf: Vec<f64>,
-    pub output_buf: Vec<f64>,
+    // Allocated once in activate() to max_frames_count capacity.
+    // The audio thread writes into pre-reserved memory without touching the allocator —
+    // heap alloc/dealloc in the audio thread causes non-deterministic latency and glitches.
+    pub input_conv_buf: Vec<f64>,
+    pub output_conv_buf: Vec<f64>,
     pub parameters_rx: Arc<ArcSwap<PluginParameters>>,
     pub parameters_wx: Arc<Mutex<PluginParameters>>,
+    pub nam: NAMState,
     #[cfg(any(target_os = "windows", target_os = "macos"))]
-    pub gui_window: Option<wry::WebView>,
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    pub gui_width: u32,
-    #[cfg(any(target_os = "windows", target_os = "macos"))]
-    pub gui_height: u32,
+    pub gui: GUIState,
 }
 
 pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
@@ -62,7 +64,7 @@ pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
 };
 
 pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
-    nam::ffi::activation_enable_fast_tanh();
+    nam::nam::ffi::activation_enable_fast_tanh();
 
     let plugin_data = unsafe { (*plugin).plugin_data as *const Plugin };
     let plugin_ref = unsafe { plugin_data.as_ref_unchecked() };
@@ -100,12 +102,19 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let plugin_ref = unsafe { plugin.as_mut_unchecked() };
 
     plugin_ref.sample_rate = sample_rate;
-    plugin_ref.input_buf = vec![0.0f64; max_frames_count as usize];
-    plugin_ref.output_buf = vec![0.0f64; max_frames_count as usize];
+    plugin_ref.input_conv_buf = vec![0.0f64; max_frames_count as usize];
+    plugin_ref.output_conv_buf = vec![0.0f64; max_frames_count as usize];
 
-    let mut model = nam::ffi::dsp_load(MODEL_JSON);
-    nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
-    plugin_ref.model = Some(model);
+    let mut model = nam::nam::ffi::dsp_load(MODEL_JSON);
+    nam::nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
+    plugin_ref.nam.model = Some(model);
+
+    let model_rate = nam::nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if let Ok(mut q) = plugin_ref.gui.message_queue.lock() {
+        q.push(GUIRequest::ModelRate(model_rate));
+    }
 
     true
 }
@@ -122,8 +131,8 @@ pub unsafe extern "C" fn reset(plugin: *const clap_plugin) {
     let plugin = unsafe { (*plugin).plugin_data as *mut Plugin };
     let plugin_ref = unsafe { plugin.as_mut_unchecked() };
 
-    if let Some(model) = plugin_ref.model.as_mut() {
-        nam::ffi::dsp_reset(model.pin_mut(), plugin_ref.sample_rate, plugin_ref.input_buf.len() as i32);
+    if let Some(model) = plugin_ref.nam.model.as_mut() {
+        nam::nam::ffi::dsp_reset(model.pin_mut(), plugin_ref.sample_rate, plugin_ref.input_conv_buf.len() as i32);
     }
 }
 
@@ -144,7 +153,18 @@ pub unsafe extern "C" fn get_extension(_plugin: *const clap_plugin, id: *const c
     std::ptr::null()
 }
 
-pub unsafe extern "C" fn on_main_thread(_plugin: *const clap_plugin) {}
+pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if let Some(wv) = &plugin_ref.gui.window {
+        if let Ok(mut q) = plugin_ref.gui.message_queue.lock() {
+            for msg in q.drain(..) {
+                send_ui_event(wv, msg);
+            }
+        }
+    }
+}
 
 pub unsafe extern "C" fn process(plugin: *const clap_plugin, process: *const clap_process_t) -> clap_process_status {
     let plugin = unsafe { (*plugin).plugin_data as *mut Plugin };

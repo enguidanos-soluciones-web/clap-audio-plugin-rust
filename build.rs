@@ -11,8 +11,8 @@ fn main() {
 
     clap_bindings.write_to_file(out.join("clap.rs")).expect("write failed");
 
-    cxx_build::bridge("src/nam.rs")
-        .file("src/nam.cpp")
+    cxx_build::bridge("src/nam/nam.rs")
+        .file("src/nam/nam.cpp")
         .file("external/neural-amp-modeler-0.5.1/NAM/activations.cpp")
         .file("external/neural-amp-modeler-0.5.1/NAM/container.cpp")
         .file("external/neural-amp-modeler-0.5.1/NAM/conv1d.cpp")
@@ -25,7 +25,7 @@ fn main() {
         .file("external/neural-amp-modeler-0.5.1/NAM/wavenet/model.cpp")
         .file("external/neural-amp-modeler-0.5.1/NAM/wavenet/a2_fast.cpp")
         .file("external/neural-amp-modeler-0.5.1/NAM/wavenet/slimmable.cpp")
-        .include("src")
+        .include("src/nam")
         .include("external/neural-amp-modeler-0.5.1/NAM")
         .include("external/neural-amp-modeler-0.5.1/Dependencies/eigen")
         .include("external/neural-amp-modeler-0.5.1/Dependencies/nlohmann")
@@ -33,7 +33,7 @@ fn main() {
         .flag_if_supported("-w")
         .compile("nam");
 
-    println!("cargo::rerun-if-changed=src/nam.rs");
-    println!("cargo::rerun-if-changed=src/nam.h");
-    println!("cargo::rerun-if-changed=src/nam.cpp");
+    println!("cargo::rerun-if-changed=src/nam/nam.rs");
+    println!("cargo::rerun-if-changed=src/nam/nam.h");
+    println!("cargo::rerun-if-changed=src/nam/nam.cpp");
 }

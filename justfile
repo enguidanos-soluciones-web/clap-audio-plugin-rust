@@ -20,13 +20,13 @@ bundle:
 
 [macos]
 bundle:
-    clap-validator validate {{build_dir}}/lib{{lib_name}}.dylib
     mkdir -p {{build_dir}}/{{plugin_name}}.clap/Contents/MacOS
     cp {{build_dir}}/lib{{lib_name}}.dylib {{build_dir}}/{{plugin_name}}.clap/Contents/MacOS/{{plugin_name}}
     just _plist
     mkdir -p ~/Library/Audio/Plug-Ins/CLAP
     ditto {{build_dir}}/{{plugin_name}}.clap ~/Library/Audio/Plug-Ins/CLAP/{{plugin_name}}.clap
     codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/CLAP/{{plugin_name}}.clap
+    clap-validator validate ~/Library/Audio/Plug-Ins/CLAP/{{plugin_name}}.clap
 
 [macos]
 _plist:

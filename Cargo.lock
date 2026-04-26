@@ -1203,6 +1203,7 @@ dependencies = [
  "cxx",
  "cxx-build",
  "raw-window-handle",
+ "serde",
  "serde_json",
  "wry",
 ]

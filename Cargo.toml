@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 arc-swap = "1.9.1"
 cxx = "1.0.194"
+serde = { version = "1.0.228", features = ["derive"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 raw-window-handle = "0.6.2"

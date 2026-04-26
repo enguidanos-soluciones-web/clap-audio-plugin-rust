@@ -8,6 +8,7 @@ mod descriptor;
 mod entry;
 mod extensions;
 mod factory;
+mod gui;
 mod helper;
 mod nam;
 mod parameters;
