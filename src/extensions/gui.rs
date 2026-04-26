@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle, WindowHandle};
-use wry::{Rect, WebViewBuilder, dpi::{LogicalPosition, LogicalSize}};
+use wry::{
+    Rect, WebViewBuilder,
+    dpi::{LogicalPosition, LogicalSize},
+};
 
 use crate::{
     clap::*,
@@ -116,11 +119,7 @@ pub static GUI_EXT: clap_plugin_gui_t = clap_plugin_gui {
     hide: Some(hide),
 };
 
-pub unsafe extern "C" fn is_api_supported(
-    _plugin: *const clap_plugin_t,
-    api: *const std::ffi::c_char,
-    is_floating: bool,
-) -> bool {
+pub unsafe extern "C" fn is_api_supported(_plugin: *const clap_plugin_t, api: *const std::ffi::c_char, is_floating: bool) -> bool {
     if is_floating {
         return false;
     }
@@ -149,11 +148,7 @@ pub unsafe extern "C" fn get_preferred_api(
     }
 }
 
-pub unsafe extern "C" fn create(
-    _plugin: *const clap_plugin_t,
-    _api: *const std::ffi::c_char,
-    _is_floating: bool,
-) -> bool {
+pub unsafe extern "C" fn create(_plugin: *const clap_plugin_t, _api: *const std::ffi::c_char, _is_floating: bool) -> bool {
     true
 }
 
@@ -166,11 +161,7 @@ pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -
     false
 }
 
-pub unsafe extern "C" fn get_size(
-    plugin: *const clap_plugin_t,
-    width: *mut u32,
-    height: *mut u32,
-) -> bool {
+pub unsafe extern "C" fn get_size(plugin: *const clap_plugin_t, width: *mut u32, height: *mut u32) -> bool {
     let p = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
     unsafe { *width = p.gui_width };
     unsafe { *height = p.gui_height };
@@ -181,10 +172,7 @@ pub unsafe extern "C" fn can_resize(_plugin: *const clap_plugin_t) -> bool {
     true
 }
 
-pub unsafe extern "C" fn get_resize_hints(
-    _plugin: *const clap_plugin_t,
-    hints: *mut clap_gui_resize_hints_t,
-) -> bool {
+pub unsafe extern "C" fn get_resize_hints(_plugin: *const clap_plugin_t, hints: *mut clap_gui_resize_hints_t) -> bool {
     let h = unsafe { hints.as_mut_unchecked() };
     h.can_resize_horizontally = true;
     h.can_resize_vertically = true;
@@ -194,11 +182,7 @@ pub unsafe extern "C" fn get_resize_hints(
     true
 }
 
-pub unsafe extern "C" fn adjust_size(
-    _plugin: *const clap_plugin_t,
-    _width: *mut u32,
-    _height: *mut u32,
-) -> bool {
+pub unsafe extern "C" fn adjust_size(_plugin: *const clap_plugin_t, _width: *mut u32, _height: *mut u32) -> bool {
     true
 }
 
@@ -215,10 +199,7 @@ pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, heig
     true
 }
 
-pub unsafe extern "C" fn set_parent(
-    plugin: *const clap_plugin_t,
-    window: *const clap_window_t,
-) -> bool {
+pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const clap_window_t) -> bool {
     let p = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
     let params_wx: Arc<Mutex<PluginParameters>> = Arc::clone(&p.parameters_wx);
 
@@ -231,10 +212,7 @@ pub unsafe extern "C" fn set_parent(
         .with_ipc_handler(move |request| {
             let body = request.body();
             if let Ok(msg) = serde_json::from_str::<serde_json::Value>(body) {
-                if let (Some(id), Some(value)) = (
-                    msg.get("id").and_then(|v| v.as_u64()),
-                    msg.get("value").and_then(|v| v.as_f64()),
-                ) {
+                if let (Some(id), Some(value)) = (msg.get("id").and_then(|v| v.as_u64()), msg.get("value").and_then(|v| v.as_f64())) {
                     if let Ok(mut params) = params_wx.lock() {
                         let idx = id as usize;
                         if idx < PARAMS_COUNT {
@@ -252,14 +230,8 @@ pub unsafe extern "C" fn set_parent(
 
         struct HostHwnd(std::num::NonZeroIsize);
         impl HasWindowHandle for HostHwnd {
-            fn window_handle(
-                &self,
-            ) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
-                Ok(unsafe {
-                    WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(
-                        self.0,
-                    )))
-                })
+            fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
+                Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(self.0))) })
             }
         }
 
@@ -269,7 +241,10 @@ pub unsafe extern "C" fn set_parent(
             None => return false,
         };
         return match builder.build_as_child(&parent) {
-            Ok(wv) => { p.gui_window = Some(wv); true }
+            Ok(wv) => {
+                p.gui_window = Some(wv);
+                true
+            }
             Err(_) => false,
         };
     }
@@ -280,14 +255,8 @@ pub unsafe extern "C" fn set_parent(
 
         struct HostNsView(std::ptr::NonNull<std::ffi::c_void>);
         impl HasWindowHandle for HostNsView {
-            fn window_handle(
-                &self,
-            ) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
-                Ok(unsafe {
-                    WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(
-                        self.0,
-                    )))
-                })
+            fn window_handle(&self) -> Result<WindowHandle<'_>, raw_window_handle::HandleError> {
+                Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::AppKit(AppKitWindowHandle::new(self.0))) })
             }
         }
 
@@ -297,24 +266,20 @@ pub unsafe extern "C" fn set_parent(
             None => return false,
         };
         return match builder.build_as_child(&parent) {
-            Ok(wv) => { p.gui_window = Some(wv); true }
+            Ok(wv) => {
+                p.gui_window = Some(wv);
+                true
+            }
             Err(_) => false,
         };
     }
 }
 
-pub unsafe extern "C" fn set_transient(
-    _plugin: *const clap_plugin_t,
-    _window: *const clap_window_t,
-) -> bool {
+pub unsafe extern "C" fn set_transient(_plugin: *const clap_plugin_t, _window: *const clap_window_t) -> bool {
     false
 }
 
-pub unsafe extern "C" fn suggest_title(
-    _plugin: *const clap_plugin_t,
-    _title: *const std::ffi::c_char,
-) {
-}
+pub unsafe extern "C" fn suggest_title(_plugin: *const clap_plugin_t, _title: *const std::ffi::c_char) {}
 
 pub unsafe extern "C" fn show(_plugin: *const clap_plugin_t) -> bool {
     true
