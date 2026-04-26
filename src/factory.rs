@@ -46,6 +46,12 @@ unsafe extern "C" fn create_plugin(
         output_buf: Vec::new(),
         parameters_rx: Default::default(),
         parameters_wx: Default::default(),
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        gui_window: None,
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        gui_width: 600,
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        gui_height: 400,
     });
 
     let raw = Box::into_raw(plugin);

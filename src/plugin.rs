@@ -1,16 +1,23 @@
 use crate::{
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
-    extensions::{audio_ports::AUDIO_PORTS_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
+    extensions::{
+        audio_ports::AUDIO_PORTS_EXT,
+        parameters::PARAMETERS_EXT,
+        state::STATE_EXT,
+    },
     parameters::any::PARAMS_COUNT,
     nam, plugin,
     processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
 };
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use crate::extensions::gui::GUI_EXT;
 use arc_swap::ArcSwap;
 use std::{
     ffi::{CStr, c_char, c_void},
     sync::{Arc, Mutex},
 };
+
 
 const MODEL_JSON: &str = include_str!("../models/amp_drive.nam");
 
@@ -31,6 +38,12 @@ pub struct Plugin {
     pub output_buf: Vec<f64>,
     pub parameters_rx: Arc<ArcSwap<PluginParameters>>,
     pub parameters_wx: Arc<Mutex<PluginParameters>>,
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub gui_window: Option<wry::WebView>,
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub gui_width: u32,
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    pub gui_height: u32,
 }
 
 pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
@@ -123,6 +136,10 @@ pub unsafe extern "C" fn get_extension(_plugin: *const clap_plugin, id: *const c
     }
     if unsafe { CStr::from_ptr(id) } == CLAP_EXT_STATE {
         return &STATE_EXT as *const _ as *const c_void;
+    }
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if unsafe { CStr::from_ptr(id) } == CLAP_EXT_GUI {
+        return &GUI_EXT as *const _ as *const c_void;
     }
     std::ptr::null()
 }
