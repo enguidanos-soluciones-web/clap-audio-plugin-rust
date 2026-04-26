@@ -1,7 +1,7 @@
 use crate::{
     clap::*,
-    gui::parameters::any::{AnyParameter, PARAMS_COUNT},
     helper::copy_cstr,
+    parameters::any::{AnyParameter, PARAMS_COUNT},
     plugin::Plugin,
     processors::{handle_clap_event::handle_clap_event, sync_main_to_audio::sync_main_to_audio},
 };
@@ -78,17 +78,20 @@ pub extern "C" fn value_to_text(_plugin: *const clap_plugin_t, id: clap_id, valu
     let buffer = unsafe { std::slice::from_raw_parts_mut(display as *mut u8, size as usize) };
     let mut cursor = std::io::Cursor::new(buffer);
 
-    write!(cursor, "{}\0", value).is_ok()
+    write!(cursor, "{:.2}\0", value).is_ok()
 }
 
 pub extern "C" fn text_to_value(_plugin: *const clap_plugin_t, _param_id: clap_id, display: *const c_char, value: *mut f64) -> bool {
     let Ok(s) = (unsafe { std::ffi::CStr::from_ptr(display) }).to_str() else {
         return false;
     };
+
     let Ok(parsed) = s.trim().parse::<f64>() else {
         return false;
     };
+
     unsafe { *value = parsed };
+
     true
 }
 

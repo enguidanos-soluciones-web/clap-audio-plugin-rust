@@ -46,9 +46,6 @@ unsafe extern "C" fn create_plugin(
         output_buf: Vec::new(),
         parameters_rx: Default::default(),
         parameters_wx: Default::default(),
-        gui_window: None,
-        gui_width: 600,
-        gui_height: 400,
     });
 
     let raw = Box::into_raw(plugin);

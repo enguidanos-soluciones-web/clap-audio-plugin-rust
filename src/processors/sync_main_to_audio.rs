@@ -1,4 +1,4 @@
-use crate::{clap::*, gui::parameters::any::PARAMS_COUNT, plugin::Plugin};
+use crate::{clap::*, parameters::any::PARAMS_COUNT, plugin::Plugin};
 use std::sync::Arc;
 
 pub unsafe extern "C" fn sync_main_to_audio(plugin: &mut Plugin, out: *const clap_output_events_t) {

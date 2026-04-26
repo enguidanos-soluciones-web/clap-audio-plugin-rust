@@ -1,6 +1,6 @@
 use std::{os::raw::c_void, sync::Arc};
 
-use crate::{clap::*, gui::parameters::any::PARAMS_COUNT, plugin::Plugin, processors::sync_audio_to_main::sync_audio_to_main};
+use crate::{clap::*, parameters::any::PARAMS_COUNT, plugin::Plugin, processors::sync_audio_to_main::sync_audio_to_main};
 
 pub static STATE_EXT: clap_plugin_state_t = clap_plugin_state {
     save: Some(save),

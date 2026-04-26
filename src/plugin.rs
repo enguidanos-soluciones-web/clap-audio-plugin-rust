@@ -1,8 +1,8 @@
 use crate::{
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
-    extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
-    gui::parameters::any::PARAMS_COUNT,
+    extensions::{audio_ports::AUDIO_PORTS_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
+    parameters::any::PARAMS_COUNT,
     nam, plugin,
     processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
 };
@@ -31,9 +31,6 @@ pub struct Plugin {
     pub output_buf: Vec<f64>,
     pub parameters_rx: Arc<ArcSwap<PluginParameters>>,
     pub parameters_wx: Arc<Mutex<PluginParameters>>,
-    pub gui_window: Option<baseview::WindowHandle>,
-    pub gui_width: u32,
-    pub gui_height: u32,
 }
 
 pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
@@ -127,10 +124,6 @@ pub unsafe extern "C" fn get_extension(_plugin: *const clap_plugin, id: *const c
     if unsafe { CStr::from_ptr(id) } == CLAP_EXT_STATE {
         return &STATE_EXT as *const _ as *const c_void;
     }
-    if unsafe { CStr::from_ptr(id) } == CLAP_EXT_GUI {
-        return &GUI_EXT as *const _ as *const c_void;
-    }
-
     std::ptr::null()
 }
 

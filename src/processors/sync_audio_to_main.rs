@@ -1,4 +1,4 @@
-use crate::gui::parameters::any::PARAMS_COUNT;
+use crate::parameters::any::PARAMS_COUNT;
 use crate::plugin::Plugin;
 use std::sync::Arc;
 

@@ -1,5 +1,8 @@
-use crate::gui::parameter::{Parameter, Range};
-use crate::gui::parameters::{input_gain::InputGain, output_gain::OutputGain};
+use crate::parameters::{
+    base::{Parameter, Range},
+    input_gain::InputGain,
+    output_gain::OutputGain,
+};
 
 pub const PARAMS_COUNT: usize = 2;
 
@@ -11,8 +14,8 @@ pub enum AnyParameter {
 impl TryFrom<usize> for AnyParameter {
     type Error = ();
 
-    fn try_from(id: usize) -> Result<Self, Self::Error> {
-        match id {
+    fn try_from(index: usize) -> Result<Self, Self::Error> {
+        match index {
             Parameter::<InputGain, Range>::ID => Ok(AnyParameter::InputGain {
                 inner: Parameter::<InputGain, Range>::new(),
             }),
