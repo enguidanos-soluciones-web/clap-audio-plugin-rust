@@ -1,5 +1,4 @@
-pub mod atoms;
-pub mod components;
+pub mod composition;
 pub mod gpu;
 pub mod helpers;
 pub mod parameter;

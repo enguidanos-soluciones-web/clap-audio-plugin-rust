@@ -5,24 +5,23 @@ use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
 use vello::Scene;
 
-use crate::gui::{
-    components::{input_gain_knob::InputGainKnob, output_gain_knob::OutputGainKnob},
-    parameters::any::PARAMS_COUNT,
-    widget::Widget,
-};
+use crate::gui::{composition, parameters::any::PARAMS_COUNT, widget::Widget};
 
-static HTML: &str = include_str!("gui.html");
-
-pub struct Gui {
+pub struct GUIView {
     doc: HtmlDocument,
-    widgets: Vec<Box<dyn Widget>>,
     pointer: (f32, f32),
     element_at_pointer: Option<usize>,
 }
 
-impl Gui {
-    pub fn new(width: f32, height: f32) -> Self {
-        let mut doc = HtmlDocument::from_html(HTML, DocumentConfig::default());
+impl GUIView {
+    pub fn new(width: f32, height: f32, model_sample_rate: f64) -> Self {
+        let rate_str = if model_sample_rate > 0.0 {
+            format!("{:.0}", model_sample_rate)
+        } else {
+            "—".to_string()
+        };
+        let html = include_str!("layout.html").replace("{{MODEL_RATE}}", &rate_str);
+        let mut doc = HtmlDocument::from_html(&html, DocumentConfig::default());
 
         doc.set_viewport(Viewport {
             window_size: (width as u32, height as u32),
@@ -31,11 +30,8 @@ impl Gui {
 
         doc.resolve(0.0);
 
-        let widgets: Vec<Box<dyn Widget>> = vec![Box::new(InputGainKnob), Box::new(OutputGainKnob)];
-
         Self {
             doc,
-            widgets,
             pointer: (0.0, 0.0),
             element_at_pointer: None,
         }
@@ -58,6 +54,7 @@ impl Gui {
         let viewport = self.doc.viewport();
         {
             let mut painter = VelloScenePainter::new(scene);
+
             paint_scene(
                 &mut painter,
                 &*self.doc,
@@ -70,33 +67,28 @@ impl Gui {
         }
 
         self.element_at_pointer = None;
-        let (px, py) = self.pointer;
 
-        for widget in &self.widgets {
-            let Some(node_id) = self.doc.get_element_by_id(widget.element_id()) else {
-                continue;
-            };
-
-            let Some(rect) = self.doc.get_client_bounding_rect(node_id) else {
-                continue;
-            };
-
-            if px as f64 >= rect.x && px as f64 <= rect.x + rect.width && py as f64 >= rect.y && py as f64 <= rect.y + rect.height {
-                self.element_at_pointer = Some(widget.param_id());
-            }
-
-            widget.draw(
-                scene,
-                rect.x,
-                rect.y,
-                rect.width,
-                rect.height,
-                widget.normalize(values[widget.param_id()]),
-            );
-        }
+        composition::compose(self, scene, values);
     }
 
     pub fn element_at_pointer(&self) -> Option<usize> {
         self.element_at_pointer
+    }
+
+    pub fn draw_widget(&mut self, scene: &mut Scene, widget: &dyn Widget, value: f32) {
+        let Some(node_id) = self.doc.get_element_by_id(widget.element_id()) else {
+            return;
+        };
+
+        let Some(rect) = self.doc.get_client_bounding_rect(node_id) else {
+            return;
+        };
+
+        let (px, py) = self.pointer;
+        if (px as f64) >= rect.x && (px as f64) <= rect.x + rect.width && (py as f64) >= rect.y && (py as f64) <= rect.y + rect.height {
+            self.element_at_pointer = Some(widget.param_id());
+        }
+
+        widget.draw(scene, rect.x, rect.y, rect.width, rect.height, widget.normalize(value));
     }
 }

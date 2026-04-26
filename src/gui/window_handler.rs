@@ -9,13 +9,13 @@ use vello::{Scene, kurbo::Affine};
 
 use crate::{
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::Gui},
+    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::GUIView},
     plugin::PluginParameters,
 };
 
 pub struct GuiWindowHandler {
     gpu: Option<Gpu>,
-    gui: Gui,
+    gui: GUIView,
 
     parameters_rx: Arc<ArcSwap<PluginParameters>>,
     parameters_wx: Arc<Mutex<PluginParameters>>,
@@ -33,12 +33,13 @@ impl GuiWindowHandler {
     pub fn new(
         width: u32,
         height: u32,
+        model_sample_rate: f64,
         parameters_rx: Arc<ArcSwap<PluginParameters>>,
         parameters_wx: Arc<Mutex<PluginParameters>>,
     ) -> Self {
         Self {
             gpu: None,
-            gui: Gui::new(width as f32, height as f32),
+            gui: GUIView::new(width as f32, height as f32, model_sample_rate),
             parameters_rx,
             parameters_wx,
             cursor_pos: baseview::Point::new(0.0, 0.0),

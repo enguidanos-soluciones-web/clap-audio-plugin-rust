@@ -129,6 +129,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let parent = unsafe { make_parent_window(window) };
     let width = p.gui_width;
     let height = p.gui_height;
+    let model_sample_rate = p.model_sample_rate;
     let parameters_rx: Arc<ArcSwap<PluginParameters>> = Arc::clone(&p.parameters_rx);
     let parameters_wx: Arc<Mutex<PluginParameters>> = Arc::clone(&p.parameters_wx);
 
@@ -139,7 +140,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },
-        move |_window| GuiWindowHandler::new(width, height, parameters_rx, parameters_wx),
+        move |_window| GuiWindowHandler::new(width, height, model_sample_rate, parameters_rx, parameters_wx),
     );
 
     p.gui_window = Some(handle);

@@ -34,6 +34,7 @@ pub struct Plugin {
     pub gui_window: Option<baseview::WindowHandle>,
     pub gui_width: u32,
     pub gui_height: u32,
+    pub model_sample_rate: f64,
 }
 
 pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
@@ -92,6 +93,8 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     plugin_ref.sample_rate = sample_rate;
     plugin_ref.input_buf = vec![0.0f64; max_frames_count as usize];
     plugin_ref.output_buf = vec![0.0f64; max_frames_count as usize];
+
+    plugin_ref.model_sample_rate = nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
 
     let mut model = nam::ffi::dsp_load(MODEL_JSON);
     nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);

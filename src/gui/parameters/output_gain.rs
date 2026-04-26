@@ -1,5 +1,15 @@
-use crate::gui::parameter::{
-    PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
+use crate::gui::helpers::{arc_path, full_circle_path};
+use crate::gui::{
+    parameter::{
+        PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
+    },
+    widget::Widget,
+};
+use std::f64::consts::PI;
+use vello::{
+    Scene,
+    kurbo::{Affine, Circle, Line, Point, Stroke},
+    peniko::{Color, Fill},
 };
 
 #[derive(Clone, Copy)]
@@ -55,7 +65,7 @@ impl<'a> ParameterDraggable<'a, OutputGain, Range> {
     /// moving up gives a positive delta (value increases), moving down a negative one.
     ///
     /// `SENSITIVITY` sets drag resolution: that many pixels of travel covers the full
-    /// normalized range [0.0, 1.0], i.e. the entire [-40 dB, +40 dB] span.
+    /// normalized range [0.0, 1.0], i.e. the entire [-20 dB, +20 dB] span.
     pub fn on_drag(&self, start_pos: (f32, f32), start_value: f32, current_pos: (f32, f32)) -> Option<ProposedParamChange> {
         const SENSITIVITY: f32 = 200.0;
 
@@ -84,5 +94,75 @@ impl<'a> ParameterClickable<'a, OutputGain, Range> {
             index: self.inner.id,
             value: self.inner.behave.def as f32,
         })
+    }
+}
+
+impl Widget for Parameter<OutputGain, Range> {
+    fn element_id(&self) -> &'static str {
+        "output-gain"
+    }
+
+    fn param_id(&self) -> usize {
+        Self::ID
+    }
+
+    fn normalize(&self, raw: f32) -> f64 {
+        Self::new().normalize(raw as f64)
+    }
+
+    fn draw(&self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64, normalized: f64) {
+        const KNOB_START: f64 = 3.0 * PI / 4.0;
+        const KNOB_SWEEP: f64 = 3.0 * PI / 2.0;
+
+        let cx = x + width / 2.0;
+        let cy = y + height / 2.0;
+        let r = width.min(height) / 2.0 - 4.0;
+
+        let center = Point::new(cx, cy);
+
+        scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            Color::from_rgba8(58, 58, 63, 255),
+            None,
+            &Circle::new(center, r),
+        );
+
+        scene.stroke(
+            &Stroke::new(2.0),
+            Affine::IDENTITY,
+            Color::from_rgba8(42, 42, 46, 255),
+            None,
+            &arc_path(cx, cy, r - 7.0, KNOB_START, KNOB_SWEEP),
+        );
+
+        if normalized > 0.001 {
+            scene.stroke(
+                &Stroke::new(2.0),
+                Affine::IDENTITY,
+                Color::from_rgba8(190, 100, 40, 255),
+                None,
+                &arc_path(cx, cy, r - 7.0, KNOB_START, normalized * KNOB_SWEEP),
+            );
+        }
+
+        let angle = KNOB_START + normalized * KNOB_SWEEP;
+        let ix = cx + (r - 12.0) * angle.cos();
+        let iy = cy + (r - 12.0) * angle.sin();
+        scene.stroke(
+            &Stroke::new(1.5),
+            Affine::IDENTITY,
+            Color::from_rgba8(240, 240, 240, 255),
+            None,
+            &Line::new(center, Point::new(ix, iy)),
+        );
+
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            Color::from_rgba8(85, 85, 90, 255),
+            None,
+            &full_circle_path(cx, cy, r),
+        );
     }
 }
