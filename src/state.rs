@@ -2,12 +2,13 @@ use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 
-use crate::{gui::parameters::any::PARAMS_COUNT, nam};
+use crate::{gui::parameters::any::PARAMS_COUNT, nam, processors::handle_gui_event::GUIEvent};
 
 pub struct PluginState {
     pub gui_window: Option<baseview::WindowHandle>,
     pub gui_width: u32,
     pub gui_height: u32,
+    pub gui_queue: Arc<Mutex<Vec<GUIEvent>>>,
 
     pub conversion_input_buf: Vec<f64>,
     pub conversion_output_buf: Vec<f64>,
@@ -25,6 +26,7 @@ impl Default for PluginState {
             gui_window: None,
             gui_width: 600,
             gui_height: 400,
+            gui_queue: Default::default(),
 
             conversion_input_buf: Vec::new(),
             conversion_output_buf: Vec::new(),

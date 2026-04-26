@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
 use blitz_html::HtmlDocument;
@@ -5,12 +7,15 @@ use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
 use vello::Scene;
 
-use crate::gui::{composition, parameters::any::PARAMS_COUNT, widget::Widget};
+use crate::{
+    gui::{composition, parameters::any::PARAMS_COUNT, widget::Widget},
+    processors::handle_gui_event::{GUIEvent, handle_gui_event},
+};
 
 pub struct View {
-    doc: HtmlDocument,
-    pointer: (f32, f32),
-    element_at_pointer: Option<usize>,
+    pub doc: HtmlDocument,
+    pub pointer: (f32, f32),
+    pub element_at_pointer: Option<usize>,
 }
 
 impl View {
@@ -44,7 +49,14 @@ impl View {
         self.pointer = (x, y);
     }
 
-    pub fn render(&mut self, scene: &mut Scene, values: &[f32; PARAMS_COUNT]) {
+    pub fn render(&mut self, scene: &mut Scene, parameters_values: &[f32; PARAMS_COUNT], queue: Arc<Mutex<Vec<GUIEvent>>>) {
+        if let Ok(mut queue) = queue.try_lock() {
+            for msg in queue.drain(..) {
+                handle_gui_event(self, msg);
+            }
+        }
+        drop(queue);
+
         self.doc.resolve(0.0);
 
         let viewport = self.doc.viewport();
@@ -83,7 +95,7 @@ impl View {
 
         self.element_at_pointer = None;
 
-        composition::compose(self, scene, values);
+        composition::compose(self, scene, parameters_values);
     }
 
     pub fn element_at_pointer(&self) -> Option<usize> {

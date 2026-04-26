@@ -10,6 +10,7 @@ use vello::{Scene, kurbo::Affine};
 use crate::{
     gestures::{click::ActiveClick, drag::ActiveDrag},
     gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::View},
+    processors::handle_gui_event::GUIEvent,
     state::PluginParameters,
 };
 
@@ -27,6 +28,8 @@ pub struct WindowHandler {
     width: u32,
     height: u32,
     scale: f64,
+
+    queue: Arc<Mutex<Vec<GUIEvent>>>,
 }
 
 impl WindowHandler {
@@ -35,6 +38,7 @@ impl WindowHandler {
         height: u32,
         parameters_rx: Arc<ArcSwap<PluginParameters>>,
         parameters_wx: Arc<Mutex<PluginParameters>>,
+        queue: Arc<Mutex<Vec<GUIEvent>>>,
     ) -> Self {
         Self {
             gpu: None,
@@ -47,6 +51,7 @@ impl WindowHandler {
             width,
             height,
             scale: 1.0,
+            queue,
         }
     }
 }
@@ -80,7 +85,7 @@ impl BaseWindowHandlers for WindowHandler {
         // WARNING: do not simplify this to always read one side.
         //   - Always audio  → knob freezes while dragging (lags one process() cycle behind).
         //   - Always main   → host automation and preset recall are never shown in the UI.
-        let values: [f32; PARAMS_COUNT] = std::array::from_fn(|i| {
+        let curr_params_values: [f32; PARAMS_COUNT] = std::array::from_fn(|i| {
             if params.main_thread_parameters_changed[i] {
                 params.main_thread_parameters[i]
             } else {
@@ -92,7 +97,7 @@ impl BaseWindowHandlers for WindowHandler {
             .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
 
         let mut gui_scene = Scene::new();
-        self.gui.render(&mut gui_scene, &values);
+        self.gui.render(&mut gui_scene, &curr_params_values, Arc::clone(&self.queue));
 
         let mut scene = Scene::new();
         scene.append(&gui_scene, Some(Affine::scale(self.scale)));

@@ -132,6 +132,8 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let parameters_rx = Arc::clone(&plugin_ref.state.parameters_rx);
     let parameters_wx = Arc::clone(&plugin_ref.state.parameters_wx);
 
+    let queue = Arc::clone(&plugin_ref.state.gui_queue);
+
     let handle = Window::open_parented(
         &raw_parent_window,
         WindowOpenOptions {
@@ -139,7 +141,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },
-        move |_window| WindowHandler::new(width, height, parameters_rx, parameters_wx),
+        move |_window| WindowHandler::new(width, height, parameters_rx, parameters_wx, queue),
     );
 
     plugin_ref.state.gui_window = Some(handle);

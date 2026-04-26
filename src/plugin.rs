@@ -4,7 +4,10 @@ use crate::{
     extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
     gui::parameters::any::PARAMS_COUNT,
     nam, plugin,
-    processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
+    processors::{
+        handle_clap_event::handle_clap_event, handle_gui_event::GUIEvent, render_audio::render_audio,
+        sync_main_to_audio::sync_main_to_audio,
+    },
     state::PluginState,
 };
 use std::{
@@ -81,7 +84,11 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let mut model = nam::ffi::dsp_load(MODEL_JSON);
     nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
     plugin_ref.state.nam_model = Some(model);
-    plugin_ref.state.nam_model_sample_rate = nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
+    plugin_ref.state.nam_model_sample_rate = 0.0;
+
+    if let Ok(mut queue) = plugin_ref.state.gui_queue.try_lock() {
+        queue.push(GUIEvent::NamModelRateChanged(nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON)));
+    }
 
     true
 }
