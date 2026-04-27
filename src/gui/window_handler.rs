@@ -5,21 +5,19 @@ use std::{
 
 use arc_swap::ArcSwap;
 use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
-use crossbeam_queue::ArrayQueue;
 use vello::{Scene, kurbo::Affine};
 
 use crate::{
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, view::View},
-    processors::handle_gui_event::GUIEvent,
-    state::PluginParameters,
+    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, platform::set_window_background_color, view::View},
+    state::{GUIState, PluginParameters},
 };
 
 pub struct WindowHandler {
     gpu: Option<Gpu>,
 
     gui: View,
-    gui_queue: Arc<ArrayQueue<GUIEvent>>,
+    gui_state: Arc<GUIState>,
 
     parameters_rx: Arc<ArcSwap<PluginParameters>>,
     parameters_wx: Arc<Mutex<PluginParameters>>,
@@ -35,15 +33,19 @@ pub struct WindowHandler {
 
 impl WindowHandler {
     pub fn new(
+        window: &mut Window,
         width: u32,
         height: u32,
         parameters_rx: Arc<ArcSwap<PluginParameters>>,
         parameters_wx: Arc<Mutex<PluginParameters>>,
-        gui_queue: Arc<ArrayQueue<GUIEvent>>,
+        gui_state: Arc<GUIState>,
     ) -> Self {
+        set_window_background_color(window);
+
         Self {
-            gpu: None,
+            gpu: Gpu::new(window, width, height),
             gui: View::new(width as f32, height as f32),
+            gui_state,
             parameters_rx,
             parameters_wx,
             cursor_pos: baseview::Point::new(0.0, 0.0),
@@ -52,7 +54,6 @@ impl WindowHandler {
             width,
             height,
             scale: 1.0,
-            gui_queue,
         }
     }
 }
@@ -98,7 +99,7 @@ impl BaseWindowHandlers for WindowHandler {
             .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
 
         let mut gui_scene = Scene::new();
-        self.gui.render(&mut gui_scene, &curr_params_values, Arc::clone(&self.gui_queue));
+        self.gui.render(&mut gui_scene, &self.gui_state, &curr_params_values);
 
         let mut scene = Scene::new();
         scene.append(&gui_scene, Some(Affine::scale(self.scale)));

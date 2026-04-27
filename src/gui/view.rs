@@ -1,16 +1,13 @@
-use std::sync::Arc;
-
 use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
 use blitz_html::HtmlDocument;
 use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
-use crossbeam_queue::ArrayQueue;
 use vello::Scene;
 
 use crate::{
     gui::{composition, parameters::any::PARAMS_COUNT, widget::Widget},
-    processors::handle_gui_event::{GUIEvent, handle_gui_event},
+    state::GUIState,
 };
 
 pub struct View {
@@ -50,11 +47,7 @@ impl View {
         self.pointer = (x, y);
     }
 
-    pub fn render(&mut self, scene: &mut Scene, parameters_values: &[f32; PARAMS_COUNT], gui_queue: Arc<ArrayQueue<GUIEvent>>) {
-        while let Some(event) = gui_queue.pop() {
-            handle_gui_event(self, event);
-        }
-
+    pub fn render(&mut self, scene: &mut Scene, state: &GUIState, parameters_values: &[f32; PARAMS_COUNT]) {
         self.doc.resolve(0.0);
 
         let viewport = self.doc.viewport();
@@ -93,7 +86,7 @@ impl View {
 
         self.element_at_pointer = None;
 
-        composition::compose(self, scene, parameters_values);
+        composition::compose(self, scene, state, parameters_values);
     }
 
     pub fn element_at_pointer(&self) -> Option<usize> {

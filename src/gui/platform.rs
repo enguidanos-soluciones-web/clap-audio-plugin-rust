@@ -18,6 +18,38 @@ unsafe impl HasRawDisplayHandle for ClapParentWindow {
 }
 
 #[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn CGColorCreateSRGB(red: f64, green: f64, blue: f64, alpha: f64) -> *mut std::ffi::c_void;
+    fn CGColorRelease(color: *mut std::ffi::c_void);
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
+pub fn set_window_background_color(window: &baseview::Window) {
+    use objc::{msg_send, sel, sel_impl, runtime::Object};
+
+    let RawWindowHandle::AppKit(handle) = window.raw_window_handle() else { return };
+
+    unsafe {
+        let ns_view = handle.ns_view as *mut Object;
+
+        let _: () = msg_send![ns_view, setWantsLayer: true];
+
+        let layer: *mut Object = msg_send![ns_view, layer];
+        if layer.is_null() { return; }
+
+        // #1c1c1e → rgb(28, 28, 30)
+        let color = CGColorCreateSRGB(28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0);
+        let _: () = msg_send![layer, setBackgroundColor: color];
+        CGColorRelease(color);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_window_background_color(_window: &baseview::Window) {}
+
+#[cfg(target_os = "macos")]
 pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> ClapParentWindow {
     use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
     let ns_view = unsafe { (*window).__bindgen_anon_1.cocoa };

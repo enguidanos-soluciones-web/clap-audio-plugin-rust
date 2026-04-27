@@ -1,15 +1,38 @@
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use arc_swap::ArcSwap;
-use crossbeam_queue::ArrayQueue;
 
-use crate::{gui::parameters::any::PARAMS_COUNT, nam, processors::handle_gui_event::GUIEvent};
+use crate::{gui::parameters::any::PARAMS_COUNT, nam};
+
+pub struct GUIState {
+    nam_model_rate: AtomicU64,  // f64::to_bits(); NaN = not initialized
+}
+
+impl GUIState {
+    pub fn nam_model_rate(&self) -> Option<f64> {
+        let rate = f64::from_bits(self.nam_model_rate.load(Ordering::Relaxed));
+        if rate.is_nan() { None } else { Some(rate) }
+    }
+
+    pub fn set_nam_model_rate(&self, rate: f64) {
+        self.nam_model_rate.store(rate.to_bits(), Ordering::Relaxed);
+    }
+}
+
+impl Default for GUIState {
+    fn default() -> Self {
+        Self {
+            nam_model_rate: AtomicU64::new(f64::NAN.to_bits()),
+        }
+    }
+}
 
 pub struct PluginState {
     pub gui_window: Option<baseview::WindowHandle>,
     pub gui_width: u32,
     pub gui_height: u32,
-    pub gui_queue: Arc<ArrayQueue<GUIEvent>>,
+    pub gui_state: Arc<GUIState>,
 
     pub conversion_input_buf: Vec<f64>,
     pub conversion_output_buf: Vec<f64>,
@@ -26,7 +49,7 @@ impl Default for PluginState {
             gui_window: None,
             gui_width: 600,
             gui_height: 400,
-            gui_queue: Arc::new(ArrayQueue::new(64)),
+            gui_state: Default::default(),
 
             conversion_input_buf: Vec::new(),
             conversion_output_buf: Vec::new(),
