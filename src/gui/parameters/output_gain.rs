@@ -1,3 +1,4 @@
+use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
 use crate::gui::{
     parameter::{
@@ -9,7 +10,7 @@ use std::f64::consts::PI;
 use vello::{
     Scene,
     kurbo::{Affine, Circle, Line, Point, Stroke},
-    peniko::{Color, Fill},
+    peniko::Fill,
 };
 
 #[derive(Clone, Copy)]
@@ -24,8 +25,8 @@ impl Parameter<OutputGain, Range> {
             name: "Output Gain",
             gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
             behave: Range {
-                min: -40.0,
-                max: 40.0,
+                min: -10.0,
+                max: 10.0,
                 def: 0.0,
             },
             _marker_type: std::marker::PhantomData,
@@ -120,47 +121,46 @@ impl Widget for Parameter<OutputGain, Range> {
 
         let center = Point::new(cx, cy);
 
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            Color::from_rgba8(58, 58, 63, 255),
-            None,
-            &Circle::new(center, r),
-        );
+        // background
+        scene.fill(Fill::NonZero, Affine::IDENTITY, colors::neutral_600, None, &Circle::new(center, r));
 
+        // tip next
         scene.stroke(
             &Stroke::new(2.0),
             Affine::IDENTITY,
-            Color::from_rgba8(42, 42, 46, 255),
+            colors::neutral_800,
             None,
             &arc_path(cx, cy, r - 7.0, KNOB_START, KNOB_SWEEP),
         );
 
+        // tip last
         if normalized > 0.001 {
             scene.stroke(
                 &Stroke::new(2.0),
                 Affine::IDENTITY,
-                Color::from_rgba8(190, 100, 40, 255),
+                colors::amber_500,
                 None,
                 &arc_path(cx, cy, r - 7.0, KNOB_START, normalized * KNOB_SWEEP),
             );
         }
 
+        // tip
         let angle = KNOB_START + normalized * KNOB_SWEEP;
         let ix = cx + (r - 12.0) * angle.cos();
         let iy = cy + (r - 12.0) * angle.sin();
         scene.stroke(
             &Stroke::new(1.5),
             Affine::IDENTITY,
-            Color::from_rgba8(240, 240, 240, 255),
+            colors::white,
             None,
             &Line::new(center, Point::new(ix, iy)),
         );
 
+        // border
         scene.stroke(
             &Stroke::new(1.0),
             Affine::IDENTITY,
-            Color::from_rgba8(85, 85, 90, 255),
+            colors::neutral_900,
             None,
             &full_circle_path(cx, cy, r),
         );

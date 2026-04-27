@@ -1,5 +1,6 @@
 use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
+
 use blitz_html::HtmlDocument;
 use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
@@ -18,7 +19,7 @@ pub struct View {
 
 impl View {
     pub fn new(width: f32, height: f32) -> Self {
-        let html = include_str!("layout.html");
+        let html = include_str!("layout/index.html").replace("%STYLESHEET%", include_str!("layout/output.css"));
 
         let mut doc = HtmlDocument::from_html(&html, DocumentConfig::default());
 

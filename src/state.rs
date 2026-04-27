@@ -1,12 +1,12 @@
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 
 use crate::{gui::parameters::any::PARAMS_COUNT, nam};
 
 pub struct GUIState {
-    nam_model_rate: AtomicU64,  // f64::to_bits(); NaN = not initialized
+    nam_model_rate: AtomicU64, // f64::to_bits(); NaN = not initialized
 }
 
 impl GUIState {
@@ -47,8 +47,8 @@ impl Default for PluginState {
     fn default() -> Self {
         Self {
             gui_window: None,
-            gui_width: 600,
-            gui_height: 400,
+            gui_width: 800,
+            gui_height: 600,
             gui_state: Default::default(),
 
             conversion_input_buf: Vec::new(),

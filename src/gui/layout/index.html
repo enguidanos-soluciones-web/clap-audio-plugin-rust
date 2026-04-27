@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+
+        <style>
+            %STYLESHEET%
+        </style>
+    </head>
+
+    <body class="bg-neutral-800 flex flex-col">
+        <div
+            id="header"
+            class="flex items-center justify-between px-4 py-4 border-b bg-neutral-900 border-neutral-700"
+        >
+            <span
+                class="text-amber-500 uppercase tracking-widest font-bold text-sm whitespace-nowrap"
+                >Marshallian</span
+            >
+            <span
+                id="nam-model-rate"
+                class="text-xs text-neutral-500 tracking-wider"
+            ></span>
+        </div>
+
+        <div
+            class="flex-1 flex items-center justify-center gap-10 h-full w-full"
+        >
+            <div class="flex flex-col items-center gap-2.5">
+                <!--*
+                 * .knob elements are visually empty divs — they have no HTML content.
+                 * Their only purpose is to act as layout placeholders so the CSS engine
+                 * can compute a position and size for each widget inside the document flow.
+                 *
+                 * In Rust, `get_client_bounding_rect()` reads the rect produced here.
+                 * Vello then uses those pixel coords to draw the actual knob graphic.
+                 *
+                 * Without explicit width/height the div collapses to 0×0 (no content
+                 * to expand it), which means the knob would be drawn at zero size.
+                 *-->
+                <span id="input-gain-db" class="text-amber-500 text-sm"></span>
+
+                <div id="input-gain" class="w-20 h-20"></div>
+
+                <span
+                    class="text-xs font-semibold tracking-widest uppercase text-neutral-400"
+                    >Gain</span
+                >
+            </div>
+
+            <div class="flex flex-col items-center gap-2.5">
+                <span id="output-gain-db" class="text-amber-500 text-sm"></span>
+
+                <div id="output-gain" class="w-20 h-20"></div>
+
+                <span
+                    class="text-xs font-semibold tracking-widest uppercase text-neutral-400"
+                    >Master</span
+                >
+            </div>
+        </div>
+    </body>
+</html>

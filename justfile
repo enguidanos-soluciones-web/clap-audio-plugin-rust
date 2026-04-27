@@ -1,9 +1,15 @@
-plugin_name := "nam_player"
-lib_name    := "nam_player"
+plugin_name := "marshallian"
+lib_name    := "marshallian"
 
 build_dir   := "target/release"
 
+dev:
+    npx @tailwindcss/cli -i ./src/gui/layout/index.css -o ./src/gui/layout/output.css -m
+    cargo build --profile dev
+    clack-host-cpal --file-path target/debug/lib{{lib_name}}.so
+
 build:
+    npx @tailwindcss/cli -i ./src/gui/layout/index.css -o ./src/gui/layout/output.css -m
     cargo build --release
     just bundle
 
@@ -37,9 +43,9 @@ _plist:
     <plist version="1.0">
     <dict>
         <key>CFBundleExecutable</key>
-        <string>nam_player</string>
+        <string>marshallian</string>
         <key>CFBundleIdentifier</key>
-        <string>com.enguidanosweb.NamPlayer</string>
+        <string>com.enguidanosweb.Marshallian</string>
         <key>CFBundleVersion</key>
         <string>0.0.1</string>
         <key>CFBundlePackageType</key>

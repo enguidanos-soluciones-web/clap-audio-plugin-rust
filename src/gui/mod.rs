@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+pub mod colors;
 pub mod composition;
 pub mod gpu;
 pub mod helpers;

@@ -137,7 +137,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let handle = Window::open_parented(
         &raw_parent_window,
         WindowOpenOptions {
-            title: "NAM Player".to_string(),
+            title: "Marshallian".to_string(),
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },

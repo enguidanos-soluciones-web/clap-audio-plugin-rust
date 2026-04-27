@@ -10,10 +10,15 @@ git checkout tags/v0.5.1
 git submodule update --init --recursive
 ```
 
-### Compile
+### Dev
 
 ```bash
-# Compilar
+watchexec -r -e html,css,rs -- just dev
+```
+
+### Build
+
+```bash
 just build
 ```
 

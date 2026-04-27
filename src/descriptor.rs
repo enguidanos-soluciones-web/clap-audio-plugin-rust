@@ -16,13 +16,13 @@ static PLUGIN_FEATURES: FeatureList = FeatureList([
 
 pub static PLUGIN_DESCRIPTOR: clap_plugin_descriptor_t = clap_plugin_descriptor {
     clap_version: CLAP_VERSION_INIT,
-    id: c"com.enguidanosweb.NamPlayer".as_ptr(),
-    name: c"NAM Player".as_ptr(),
+    id: c"com.enguidanosweb.Marshallian".as_ptr(),
+    name: c"Marshallian".as_ptr(),
     vendor: c"enguidanosweb".as_ptr(),
     url: c"https://enguidanosweb.com".as_ptr(),
     manual_url: c"https://enguidanosweb.com".as_ptr(),
     support_url: c"https://enguidanosweb.com".as_ptr(),
     version: c"0.0.1".as_ptr(),
-    description: c"NAM PLayer".as_ptr(),
+    description: c"Marshallian".as_ptr(),
     features: PLUGIN_FEATURES.0.as_ptr(),
 };

@@ -1,16 +1,23 @@
 [package]
-name = "nam_player"
+name = "marshallian"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
 
+[profile.dev]
+opt-level = 0
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 2
+
 [dependencies]
 arc-swap = "1.9.1"
-baseview = { git = "https://github.com/RustAudio/baseview" }
 anyrender_vello = "0.8"
-blitz-dom = { git = "https://github.com/DioxusLabs/blitz" }
+baseview = { git = "https://github.com/RustAudio/baseview" }
+blitz-dom = { git = "https://github.com/DioxusLabs/blitz", features = ["incremental"] }
 blitz-html = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-paint = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-traits = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
@@ -20,12 +27,12 @@ raw-window-handle = "0.5"
 vello = "0.8.0"
 wgpu = "28.0.0"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2"
-
 [build-dependencies]
 bindgen = "0.72.1"
 cxx-build = "1.0.194"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
 
 [lints.clippy]
 unwrap_used = "deny"

@@ -5,3 +5,6 @@ out/
 .DS_Store
 
 compile_commands.json
+
+src/gui/layout/output.css
+node_modules/
