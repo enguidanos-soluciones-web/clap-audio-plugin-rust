@@ -1,10 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
 use blitz_html::HtmlDocument;
 use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
+use crossbeam_queue::ArrayQueue;
 use vello::Scene;
 
 use crate::{
@@ -49,13 +50,10 @@ impl View {
         self.pointer = (x, y);
     }
 
-    pub fn render(&mut self, scene: &mut Scene, parameters_values: &[f32; PARAMS_COUNT], queue: Arc<Mutex<Vec<GUIEvent>>>) {
-        if let Ok(mut queue) = queue.try_lock() {
-            for msg in queue.drain(..) {
-                handle_gui_event(self, msg);
-            }
+    pub fn render(&mut self, scene: &mut Scene, parameters_values: &[f32; PARAMS_COUNT], gui_queue: Arc<ArrayQueue<GUIEvent>>) {
+        while let Some(event) = gui_queue.pop() {
+            handle_gui_event(self, event);
         }
-        drop(queue);
 
         self.doc.resolve(0.0);
 

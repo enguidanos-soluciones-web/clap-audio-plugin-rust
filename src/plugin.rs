@@ -83,12 +83,11 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
 
     let mut model = nam::ffi::dsp_load(MODEL_JSON);
     nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
-    plugin_ref.state.nam_model = Some(model);
-    plugin_ref.state.nam_model_sample_rate = 0.0;
 
-    if let Ok(mut queue) = plugin_ref.state.gui_queue.try_lock() {
-        queue.push(GUIEvent::NamModelRateChanged(nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON)));
-    }
+    plugin_ref.state.nam_model = Some(model);
+
+    let nam_model_rate = nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON);
+    let _ = plugin_ref.state.gui_queue.push(GUIEvent::NamModelRateChanged(nam_model_rate));
 
     true
 }

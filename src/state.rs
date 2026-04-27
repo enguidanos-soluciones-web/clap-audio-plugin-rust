@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
+use crossbeam_queue::ArrayQueue;
 
 use crate::{gui::parameters::any::PARAMS_COUNT, nam, processors::handle_gui_event::GUIEvent};
 
@@ -8,12 +9,11 @@ pub struct PluginState {
     pub gui_window: Option<baseview::WindowHandle>,
     pub gui_width: u32,
     pub gui_height: u32,
-    pub gui_queue: Arc<Mutex<Vec<GUIEvent>>>,
+    pub gui_queue: Arc<ArrayQueue<GUIEvent>>,
 
     pub conversion_input_buf: Vec<f64>,
     pub conversion_output_buf: Vec<f64>,
 
-    pub nam_model_sample_rate: f64,
     pub nam_model: Option<cxx::UniquePtr<nam::ffi::NamDsp>>,
 
     pub parameters_rx: Arc<ArcSwap<PluginParameters>>,
@@ -26,13 +26,12 @@ impl Default for PluginState {
             gui_window: None,
             gui_width: 600,
             gui_height: 400,
-            gui_queue: Default::default(),
+            gui_queue: Arc::new(ArrayQueue::new(64)),
 
             conversion_input_buf: Vec::new(),
             conversion_output_buf: Vec::new(),
 
             nam_model: None,
-            nam_model_sample_rate: 0.0,
 
             parameters_rx: Default::default(),
             parameters_wx: Default::default(),

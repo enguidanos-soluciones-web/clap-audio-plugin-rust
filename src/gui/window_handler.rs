@@ -5,6 +5,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
+use crossbeam_queue::ArrayQueue;
 use vello::{Scene, kurbo::Affine};
 
 use crate::{
@@ -16,7 +17,9 @@ use crate::{
 
 pub struct WindowHandler {
     gpu: Option<Gpu>,
+
     gui: View,
+    gui_queue: Arc<ArrayQueue<GUIEvent>>,
 
     parameters_rx: Arc<ArcSwap<PluginParameters>>,
     parameters_wx: Arc<Mutex<PluginParameters>>,
@@ -28,8 +31,6 @@ pub struct WindowHandler {
     width: u32,
     height: u32,
     scale: f64,
-
-    queue: Arc<Mutex<Vec<GUIEvent>>>,
 }
 
 impl WindowHandler {
@@ -38,7 +39,7 @@ impl WindowHandler {
         height: u32,
         parameters_rx: Arc<ArcSwap<PluginParameters>>,
         parameters_wx: Arc<Mutex<PluginParameters>>,
-        queue: Arc<Mutex<Vec<GUIEvent>>>,
+        gui_queue: Arc<ArrayQueue<GUIEvent>>,
     ) -> Self {
         Self {
             gpu: None,
@@ -51,7 +52,7 @@ impl WindowHandler {
             width,
             height,
             scale: 1.0,
-            queue,
+            gui_queue,
         }
     }
 }
@@ -97,7 +98,7 @@ impl BaseWindowHandlers for WindowHandler {
             .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
 
         let mut gui_scene = Scene::new();
-        self.gui.render(&mut gui_scene, &curr_params_values, Arc::clone(&self.queue));
+        self.gui.render(&mut gui_scene, &curr_params_values, Arc::clone(&self.gui_queue));
 
         let mut scene = Scene::new();
         scene.append(&gui_scene, Some(Affine::scale(self.scale)));
