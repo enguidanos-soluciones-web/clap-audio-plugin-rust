@@ -13,7 +13,7 @@ git submodule update --init --recursive
 ### Dev
 
 ```bash
-watchexec -r -e html,css,rs -- just dev
+RUST_BACKTRACE=1 watchexec -r -e html,css,rs -- just dev
 ```
 
 ### Build

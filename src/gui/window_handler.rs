@@ -1,11 +1,12 @@
 use crate::{
+    channel::Sender,
+    clap::clap_host_t,
     gestures::{click::ActiveClick, drag::ActiveDrag},
     gui::{gpu::Gpu, platform::set_window_background_color, view::View},
     state::{GUIShared, ParamChange, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
 use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
-use rtrb::Producer;
 use std::{sync::Arc, time::Instant};
 use vello::{Scene, kurbo::Affine};
 
@@ -17,8 +18,9 @@ pub struct WindowHandler {
 
     view: View,
 
+    host: *const clap_host_t,
     gui_shared: Arc<ArcSwap<GUIShared>>,
-    gui_changes_tx: Producer<ParamChange>,
+    gui_changes: Sender<ParamChange>,
     params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
     cursor_drag: Option<ActiveDrag>,
@@ -26,13 +28,17 @@ pub struct WindowHandler {
     cursor_last_click: Option<(Instant, usize)>,
 }
 
+// SAFETY: host pointer is valid for plugin lifetime; request_callback is [thread-safe] per CLAP spec.
+unsafe impl Send for WindowHandler {}
+
 impl WindowHandler {
     pub fn new(
         window: &mut Window,
         width: u32,
         height: u32,
+        host: *const clap_host_t,
         gui_shared: Arc<ArcSwap<GUIShared>>,
-        gui_changes_tx: Producer<ParamChange>,
+        gui_changes: Sender<ParamChange>,
         params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
     ) -> Self {
         set_window_background_color(window);
@@ -44,13 +50,22 @@ impl WindowHandler {
             height,
             scale: 1.0,
 
+            host,
             gui_shared,
-            gui_changes_tx,
+            gui_changes,
             params_snapshot,
 
             cursor_pos: baseview::Point::new(0.0, 0.0),
             cursor_last_click: None,
             cursor_drag: None,
+        }
+    }
+
+    fn request_host_callback(&self) {
+        unsafe {
+            if let Some(request_callback) = (*self.host).request_callback {
+                request_callback(self.host);
+            }
         }
     }
 }
@@ -98,10 +113,11 @@ impl BaseWindowHandlers for WindowHandler {
                 if is_double_click {
                     if let Some(clickable) = ActiveClick::from_index(index) {
                         if let Some(change) = clickable.on_double_click() {
-                            let _ = self.gui_changes_tx.push(ParamChange {
+                            let _ = self.gui_changes.push(ParamChange {
                                 id: change.index,
                                 value: change.value,
                             });
+                            self.request_host_callback();
                         }
 
                         return EventStatus::Captured;
@@ -124,10 +140,11 @@ impl BaseWindowHandlers for WindowHandler {
 
                 if let Some(cursor_drag) = &self.cursor_drag {
                     if let Some(change) = cursor_drag.on_drag(position.x as f32, position.y as f32) {
-                        let _ = self.gui_changes_tx.push(ParamChange {
+                        let _ = self.gui_changes.push(ParamChange {
                             id: change.index,
                             value: change.value,
                         });
+                        self.request_host_callback();
                     }
                 }
 

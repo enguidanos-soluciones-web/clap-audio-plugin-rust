@@ -6,10 +6,10 @@ use crate::{
     parameters::any::PARAMS_COUNT,
     plugin,
     processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
+    channel::channel,
     state::{AudioThreadState, MainThreadState, ParamChange, ParamEvent, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
-use rtrb::RingBuffer;
 use std::{
     ffi::{CStr, c_char, c_void},
     sync::Arc,
@@ -43,29 +43,23 @@ pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
 pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
-    let (daw_events_tx, daw_events_rx) = RingBuffer::new(64);
-    let (gui_changes_tx, gui_changes_rx) = RingBuffer::new(64);
-    let (param_changes_tx, param_changes_rx) = RingBuffer::new(64);
+    let (param_changes_tx, _param_changes_rx) = channel::<ParamChange>(64);
+    let (_daw_events_tx, daw_events_rx) = channel::<ParamEvent>(64);
+    let (_gui_changes_tx, gui_changes_rx) = channel::<ParamChange>(64);
+
+    let param_snapshot = Arc::new(ArcSwap::new(Arc::new(ParamSnapshot {
+        values: [0.0f32; PARAMS_COUNT],
+    })));
 
     plugin_ref.main_thread = Some(MainThreadState {
-        param_changes_tx,
-        param_snapshot: Arc::new(ArcSwap::new(Arc::new(ParamSnapshot {
-            values: [0.0f32; PARAMS_COUNT],
-        }))),
-
-        daw_events_rx,
-
-        ui_changes_rx: gui_changes_rx,
-
-        pending_param_changes_rx: Some(param_changes_rx),
-        pending_daw_events_tx: Some(daw_events_tx),
-        pending_gui_changes_tx: Some(gui_changes_tx),
-
+        param_snapshot,
+        daw_events: daw_events_rx,
+        gui_changes: gui_changes_rx,
+        param_changes: param_changes_tx,
         gui_shared: Default::default(),
         gui_window: None,
         gui_width: 800,
         gui_height: 400,
-
         thread_id: Some(std::thread::current().id()),
     });
 
@@ -96,9 +90,6 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
     if plugin_ref.audio_thread.is_some() {
-        #[cfg(debug_assertions)]
-        println!("Audio Thread already activated");
-
         return true;
     }
 
@@ -116,25 +107,13 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     plugin_ref.audio_thread = Some(AudioThreadState {
         host: plugin_ref.host,
         sample_rate,
-
         nam_model: Some(model),
-
+        dc_filter: DcFilter::new(20.0, sample_rate),
         input_buf: vec![0.0f64; max_frames_count as usize],
         output_buf: vec![0.0f64; max_frames_count as usize],
-
-        dc_filter: DcFilter::new(20.0, sample_rate),
-
         param_snapshot: Arc::clone(&main_thread.param_snapshot),
-        param_changes_rx: main_thread
-            .pending_param_changes_rx
-            .take()
-            .expect("main thread pending_param_changes_rx not initialized"),
-
-        daw_events_tx: main_thread
-            .pending_daw_events_tx
-            .take()
-            .expect("main thread pending_daw_events_tx not initialized"),
-
+        param_changes: main_thread.param_changes.new_receiver(),
+        daw_events: main_thread.daw_events.new_sender(),
         thread_id: None,
     });
 
@@ -155,33 +134,21 @@ pub unsafe extern "C" fn deactivate(plugin: *const clap_plugin) {
     let main_thread = plugin_ref.main_thread.as_mut().expect("main thread not initialized");
     main_thread.assert_main_thread();
 
-    if let Some(audio_thread) = plugin_ref.audio_thread.take() {
-        // Drain pending events from audio before drop because we don't want to
-        // loose the automatization that arrived just before 'deactivate'.
-        while let Ok(event) = main_thread.daw_events_rx.pop() {
-            match event {
-                ParamEvent::Automation { id, value } => {
-                    let mut new_snapshot = *main_thread.param_snapshot.load_full();
-                    new_snapshot.values[id] = value;
-                    main_thread.param_snapshot.store(Arc::new(new_snapshot));
-                }
-                ParamEvent::Ack => {}
-                ParamEvent::Nack { id } => {
-                    let value = main_thread.param_snapshot.load().values[id];
-                    let _ = main_thread.param_changes_tx.push(ParamChange { id, value });
-                }
+    // Drain pending events from audio before drop because we don't want to
+    // loose the automatization that arrived just before 'deactivate'.
+    while let Some(event) = main_thread.daw_events.pop() {
+        match event {
+            ParamEvent::Automation { id, value } => {
+                let mut new_snapshot = *main_thread.param_snapshot.load_full();
+                new_snapshot.values[id] = value;
+                main_thread.param_snapshot.store(Arc::new(new_snapshot));
+            }
+            ParamEvent::Ack => {}
+            ParamEvent::Nack { id } => {
+                let value = main_thread.param_snapshot.load().values[id];
+                let _ = main_thread.param_changes.push(ParamChange { id, value });
             }
         }
-
-        let AudioThreadState {
-            param_changes_rx,
-            daw_events_tx,
-            ..
-        } = audio_thread;
-
-        // Recover the tails of the audio-thread fr the next 'activate'
-        main_thread.pending_param_changes_rx = Some(param_changes_rx);
-        main_thread.pending_daw_events_tx = Some(daw_events_tx);
     }
 }
 
@@ -253,15 +220,15 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
     let mut new_snapshot = *main.param_snapshot.load_full();
 
     // 1. Changes on the GUI
-    while let Ok(change) = main.ui_changes_rx.pop() {
+    while let Some(change) = main.gui_changes.pop() {
         new_snapshot.values[change.id] = change.value;
         // propagates into audio-thread
-        let _ = main.param_changes_tx.push(change);
+        let _ = main.param_changes.push(change);
         snapshot_dirty = true;
     }
 
     // 2. Events from audio-thread (automation + acks + nacks)
-    while let Ok(event) = main.daw_events_rx.pop() {
+    while let Some(event) = main.daw_events.pop() {
         match event {
             ParamEvent::Automation { id, value } => {
                 new_snapshot.values[id] = value;
@@ -273,7 +240,7 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
             ParamEvent::Nack { id } => {
                 // Host rejected — requeue for the next iter
                 let value = new_snapshot.values[id];
-                let _ = main.param_changes_tx.push(ParamChange { id, value });
+                let _ = main.param_changes.push(ParamChange { id, value });
             }
         }
     }
@@ -291,6 +258,9 @@ pub unsafe extern "C" fn process(plugin: *const clap_plugin, process: *const cla
     let Some(audio_thread) = plugin_ref.audio_thread.as_mut() else {
         return CLAP_PROCESS_ERROR as clap_process_status;
     };
+    if audio_thread.thread_id.is_none() {
+        return CLAP_PROCESS_ERROR as clap_process_status;
+    }
 
     audio_thread.assert_audio_thread();
 

@@ -9,7 +9,7 @@ pub fn sync_main_to_audio(audio_thread: &mut AudioThreadState, out: *const clap_
     let out_ref = unsafe { out.as_ref_unchecked() };
     let Some(try_push) = out_ref.try_push else { return };
 
-    while let Ok(change) = audio_thread.param_changes_rx.pop() {
+    while let Some(change) = audio_thread.param_changes.pop() {
         let mut event = unsafe { std::mem::zeroed::<clap_event_param_value_t>() };
         event.header.size = std::mem::size_of::<clap_event_param_value_t>() as u32;
         event.header.time = 0;
@@ -26,10 +26,10 @@ pub fn sync_main_to_audio(audio_thread: &mut AudioThreadState, out: *const clap_
 
         if unsafe { try_push(out, &event.header) } {
             // Host accepted the change. We need to ack the man-thread.
-            let _ = audio_thread.daw_events_tx.push(ParamEvent::Ack);
+            let _ = audio_thread.daw_events.push(ParamEvent::Ack);
         } else {
             // Host not accepted the change. Main-thread preserves changed=true and will requeue on the next attempt.
-            let _ = audio_thread.daw_events_tx.push(ParamEvent::Nack { id: change.id });
+            let _ = audio_thread.daw_events.push(ParamEvent::Nack { id: change.id });
         }
     }
 }

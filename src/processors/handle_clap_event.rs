@@ -16,7 +16,7 @@ pub fn handle_clap_event(audio_thread: &mut AudioThreadState, event: *const clap
         let id = value_event.param_id as usize;
         let value = value_event.value as f32;
 
-        let _ = audio_thread.daw_events_tx.push(ParamEvent::Automation { id, value });
+        let _ = audio_thread.daw_events.push(ParamEvent::Automation { id, value });
 
         // Request host call on_main_thread to update the snapshot
         unsafe {

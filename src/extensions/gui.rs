@@ -110,7 +110,7 @@ pub unsafe extern "C" fn destroy(plugin: *const clap_plugin_t) {
         window.close();
     }
 
-    let _ = main_thread.gui_window.take();
+    main_thread.gui_window = None;
 }
 
 // [main-thread]
@@ -199,9 +199,10 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let width = main_thread.gui_width;
     let height = main_thread.gui_height;
 
+    let host_addr = plugin_ref.host as usize;
     let params_snapshot = Arc::clone(&main_thread.param_snapshot);
     let gui_shared = Arc::clone(&main_thread.gui_shared);
-    let gui_changes_tx = main_thread.pending_gui_changes_tx.take().expect("gui_changes_tx not initialized");
+    let gui_changes = main_thread.gui_changes.new_sender();
 
     let handle = Window::open_parented(
         &raw_parent_window,
@@ -210,7 +211,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },
-        move |window| WindowHandler::new(window, width, height, gui_shared, gui_changes_tx, params_snapshot),
+        move |window| WindowHandler::new(window, width, height, host_addr as *const clap_host_t, gui_shared, gui_changes, params_snapshot),
     );
 
     main_thread.gui_window = Some(handle);

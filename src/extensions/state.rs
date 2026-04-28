@@ -60,7 +60,7 @@ pub extern "C" fn load(plugin: *const clap_plugin_t, stream: *const clap_istream
 
         // Propagate all the params into audio-thread
         for id in 0..PARAMS_COUNT {
-            let _ = main_thread.param_changes_tx.push(ParamChange {
+            let _ = main_thread.param_changes.push(ParamChange {
                 id,
                 value: new_snapshot.values[id],
             });

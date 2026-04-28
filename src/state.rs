@@ -1,22 +1,25 @@
+use crate::channel::{Receiver, Sender};
 use crate::clap::*;
 use crate::dsp::dc_filter::DcFilter;
 use crate::{dsp::nam, parameters::any::PARAMS_COUNT};
 use arc_swap::ArcSwap;
-use rtrb::{Consumer, Producer};
+use std::fmt::Debug;
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub enum ParamEvent {
     Ack,
     Nack { id: usize },
     Automation { id: usize, value: f32 },
 }
 
+#[derive(Debug)]
 pub struct ParamChange {
     pub id: usize,
     pub value: f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct ParamSnapshot {
     pub values: [f32; PARAMS_COUNT],
 }
@@ -32,10 +35,9 @@ pub struct AudioThreadState {
 
     pub dc_filter: DcFilter,
 
-    pub param_changes_rx: Consumer<ParamChange>,
+    pub daw_events: Sender<ParamEvent>,
+    pub param_changes: Receiver<ParamChange>,
     pub param_snapshot: Arc<ArcSwap<ParamSnapshot>>,
-
-    pub daw_events_tx: Producer<ParamEvent>,
 
     pub thread_id: Option<std::thread::ThreadId>,
 }
@@ -51,18 +53,11 @@ impl AudioThreadState {
 }
 
 pub struct MainThreadState {
-    pub param_changes_tx: Producer<ParamChange>,
     pub param_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
-    pub daw_events_rx: Consumer<ParamEvent>,
-
-    pub ui_changes_rx: Consumer<ParamChange>,
-
-    // MainThread State is created under plugin.init(). We dont have yet initialized the AudioThread.
-    // We need to save temporally the producers/consumers of the AudioThread.
-    pub pending_param_changes_rx: Option<Consumer<ParamChange>>,
-    pub pending_daw_events_tx: Option<Producer<ParamEvent>>,
-    pub pending_gui_changes_tx: Option<Producer<ParamChange>>,
+    pub daw_events: Receiver<ParamEvent>,
+    pub gui_changes: Receiver<ParamChange>,
+    pub param_changes: Sender<ParamChange>,
 
     pub gui_shared: Arc<ArcSwap<GUIShared>>,
     pub gui_window: Option<baseview::WindowHandle>,
@@ -82,7 +77,7 @@ impl MainThreadState {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct GUIShared {
     pub nam_model_rate: Option<u64>,
 }
