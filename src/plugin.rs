@@ -138,7 +138,6 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let main_thread = plugin_ref.main_thread.as_mut().expect("main thread not initialized");
     main_thread.assert_main_thread();
 
-    dsp::nam::ffi::activation_enable_fast_tanh();
     let mut model = dsp::nam::ffi::dsp_load(MODEL_JSON);
     dsp::nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
 
