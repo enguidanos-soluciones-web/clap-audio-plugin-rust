@@ -1,5 +1,5 @@
-use crate::gui::parameter::{Parameter, Range};
-use crate::gui::parameters::{input_gain::InputGain, output_gain::OutputGain};
+use super::{Parameter, Range};
+use crate::parameters::{input_gain::InputGain, output_gain::OutputGain};
 
 pub const PARAMS_COUNT: usize = 2;
 

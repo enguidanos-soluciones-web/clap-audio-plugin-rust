@@ -1,4 +1,4 @@
-use crate::gui::{parameter::ProposedParamChange, parameters::any::AnyParameter};
+use crate::parameters::{ProposedParamChange, any::AnyParameter};
 
 pub struct ActiveClick(AnyParameter);
 

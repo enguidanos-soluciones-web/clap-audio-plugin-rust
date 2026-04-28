@@ -1,20 +1,32 @@
-use crate::{clap::*, helper::copy_cstr};
+use crate::{clap::*, helper::copy_cstr, plugin::Plugin};
 
 pub static AUDIO_PORTS_EXT: clap_plugin_audio_ports_t = clap_plugin_audio_ports {
     count: Some(count_audio_ports),
     get: Some(get_audio_ports),
 };
 
-pub unsafe extern "C" fn count_audio_ports(_plugin: *const clap_plugin_t, _is_input: bool) -> u32 {
+// [main-thread]
+pub unsafe extern "C" fn count_audio_ports(plugin: *const clap_plugin_t, _is_input: bool) -> u32 {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("main thread not initialized");
+    main_thread.assert_main_thread();
+
     1
 }
 
+// [main-thread]
 pub unsafe extern "C" fn get_audio_ports(
-    _plugin: *const clap_plugin_t,
+    plugin: *const clap_plugin_t,
     index: u32,
     is_input: bool,
     info: *mut clap_audio_port_info_t,
 ) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("main thread not initialized");
+    main_thread.assert_main_thread();
+
     if index != 0 {
         return false;
     }

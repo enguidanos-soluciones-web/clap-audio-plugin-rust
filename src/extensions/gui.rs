@@ -25,7 +25,13 @@ pub static GUI_EXT: clap_plugin_gui_t = clap_plugin_gui {
     hide: Some(hide),
 };
 
-pub unsafe extern "C" fn is_api_supported(_plugin: *const clap_plugin_t, api: *const std::ffi::c_char, is_floating: bool) -> bool {
+// [main-thread]
+pub unsafe extern "C" fn is_api_supported(plugin: *const clap_plugin_t, api: *const std::ffi::c_char, is_floating: bool) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     if is_floating {
         return false;
     }
@@ -48,12 +54,19 @@ pub unsafe extern "C" fn is_api_supported(_plugin: *const clap_plugin_t, api: *c
     }
 }
 
+// [main-thread]
 pub unsafe extern "C" fn get_preferred_api(
-    _plugin: *const clap_plugin_t,
+    plugin: *const clap_plugin_t,
     api: *mut *const std::ffi::c_char,
     is_floating: *mut bool,
 ) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     unsafe { *is_floating = false };
+
     #[cfg(target_os = "linux")]
     {
         unsafe { *api = CLAP_WINDOW_API_X11.as_ptr() };
@@ -76,63 +89,119 @@ pub unsafe extern "C" fn get_preferred_api(
     }
 }
 
-pub unsafe extern "C" fn create(_plugin: *const clap_plugin_t, _api: *const std::ffi::c_char, _is_floating: bool) -> bool {
+// [main-thread]
+pub unsafe extern "C" fn create(plugin: *const clap_plugin_t, _api: *const std::ffi::c_char, _is_floating: bool) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     true
 }
 
+// [main-thread]
 pub unsafe extern "C" fn destroy(plugin: *const clap_plugin_t) {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    plugin_ref.state.gui_window = None;
+
+    let main_thread = plugin_ref.main_thread.as_mut().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
+    if let Some(window) = main_thread.gui_window.as_mut() {
+        window.close();
+    }
+
+    let _ = main_thread.gui_window.take();
 }
 
-pub unsafe extern "C" fn set_scale(_plugin: *const clap_plugin_t, _scale: f64) -> bool {
+// [main-thread]
+pub unsafe extern "C" fn set_scale(plugin: *const clap_plugin_t, _scale: f64) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     false
 }
 
+// [main-thread]
 pub unsafe extern "C" fn get_size(plugin: *const clap_plugin_t, width: *mut u32, height: *mut u32) -> bool {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
-    unsafe { *width = plugin_ref.state.gui_width };
-    unsafe { *height = plugin_ref.state.gui_height };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
+    unsafe { *width = main_thread.gui_width };
+    unsafe { *height = main_thread.gui_height };
+
     true
 }
 
-pub unsafe extern "C" fn can_resize(_plugin: *const clap_plugin_t) -> bool {
+// [main-thread & !floating]
+pub unsafe extern "C" fn can_resize(plugin: *const clap_plugin_t) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     true
 }
 
-pub unsafe extern "C" fn get_resize_hints(_plugin: *const clap_plugin_t, hints: *mut clap_gui_resize_hints_t) -> bool {
+// [main-thread & !floating]
+pub unsafe extern "C" fn get_resize_hints(plugin: *const clap_plugin_t, hints: *mut clap_gui_resize_hints_t) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     let h = unsafe { hints.as_mut_unchecked() };
+
     h.can_resize_horizontally = true;
     h.can_resize_vertically = true;
     h.preserve_aspect_ratio = false;
     h.aspect_ratio_width = 0;
     h.aspect_ratio_height = 0;
+
     true
 }
 
-pub unsafe extern "C" fn adjust_size(_plugin: *const clap_plugin_t, _width: *mut u32, _height: *mut u32) -> bool {
+// [main-thread & !floating]
+pub unsafe extern "C" fn adjust_size(plugin: *const clap_plugin_t, _width: *mut u32, _height: *mut u32) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     true
 }
 
+// [main-thread & !floating]
 pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, height: u32) -> bool {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
-    plugin_ref.state.gui_width = width;
-    plugin_ref.state.gui_height = height;
+
+    let main_thread = plugin_ref.main_thread.as_mut().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
+    main_thread.gui_width = width;
+    main_thread.gui_height = height;
+
     true
 }
 
+// [main-thread & !floating]
 pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const clap_window_t) -> bool {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
+    let main_thread = plugin_ref.main_thread.as_mut().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     let raw_parent_window = unsafe { make_parent_window(window) };
 
-    let width = plugin_ref.state.gui_width;
-    let height = plugin_ref.state.gui_height;
+    let width = main_thread.gui_width;
+    let height = main_thread.gui_height;
 
-    let parameters_rx = Arc::clone(&plugin_ref.state.parameters_rx);
-    let parameters_wx = Arc::clone(&plugin_ref.state.parameters_wx);
-
-    let gui_state = Arc::clone(&plugin_ref.state.gui_state);
+    let params_snapshot = Arc::clone(&main_thread.param_snapshot);
+    let gui_shared = Arc::clone(&main_thread.gui_shared);
+    let gui_changes_tx = main_thread.pending_gui_changes_tx.take().expect("gui_changes_tx not initialized");
 
     let handle = Window::open_parented(
         &raw_parent_window,
@@ -141,24 +210,48 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
             size: Size::new(width as f64, height as f64),
             scale: WindowScalePolicy::SystemScaleFactor,
         },
-        move |window| WindowHandler::new(window, width, height, parameters_rx, parameters_wx, gui_state),
+        move |window| WindowHandler::new(window, width, height, gui_shared, gui_changes_tx, params_snapshot),
     );
 
-    plugin_ref.state.gui_window = Some(handle);
+    main_thread.gui_window = Some(handle);
 
     true
 }
 
-pub unsafe extern "C" fn set_transient(_plugin: *const clap_plugin_t, _window: *const clap_window_t) -> bool {
+// [main-thread & floating]
+pub unsafe extern "C" fn set_transient(plugin: *const clap_plugin_t, _window: *const clap_window_t) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     false
 }
 
-pub unsafe extern "C" fn suggest_title(_plugin: *const clap_plugin_t, _title: *const std::ffi::c_char) {}
+// [main-thread & floating]
+pub unsafe extern "C" fn suggest_title(plugin: *const clap_plugin_t, _title: *const std::ffi::c_char) {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
 
-pub unsafe extern "C" fn show(_plugin: *const clap_plugin_t) -> bool {
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+}
+
+// [main-thread]
+pub unsafe extern "C" fn show(plugin: *const clap_plugin_t) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     true
 }
 
-pub unsafe extern "C" fn hide(_plugin: *const clap_plugin_t) -> bool {
+// [main-thread]
+pub unsafe extern "C" fn hide(plugin: *const clap_plugin_t) -> bool {
+    let plugin_ref = unsafe { ((*plugin).plugin_data as *const Plugin).as_ref_unchecked() };
+
+    let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
+    main_thread.assert_main_thread();
+
     true
 }

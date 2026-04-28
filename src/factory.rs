@@ -38,15 +38,16 @@ unsafe extern "C" fn create_plugin(
     }
 
     let plugin = Box::new(Plugin {
-        class: PLUGIN_CLASS,
-        sample_rate: 0.0,
-        state: Default::default(),
+        inner: PLUGIN_CLASS,
+        host,
+        main_thread: None,
+        audio_thread: None,
     });
 
     let raw = Box::into_raw(plugin);
 
     unsafe {
-        (*raw).class.plugin_data = raw as *mut c_void;
-        &(*raw).class as *const clap_plugin
+        (*raw).inner.plugin_data = raw as *mut c_void;
+        &(*raw).inner as *const clap_plugin
     }
 }

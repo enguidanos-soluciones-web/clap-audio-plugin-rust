@@ -1,35 +1,38 @@
 use crate::{
-    gui::{
-        parameter::{Parameter, Range},
-        parameters::{input_gain::InputGain, output_gain::OutputGain},
-    },
+    dsp::nam,
     helper::db_to_linear,
-    nam,
-    plugin::Plugin,
+    parameters::{Parameter, Range, input_gain::InputGain, output_gain::OutputGain},
+    state::AudioThreadState,
 };
 
-pub unsafe fn render_audio(plugin: &mut Plugin, input: *const f32, output: *mut f32, nframes: usize) {
-    let params = plugin.state.parameters_rx.load();
+pub fn render_audio(audio_thread: &mut AudioThreadState, input: *const f32, output: *mut f32, nframes: usize) {
+    audio_thread.assert_audio_thread();
 
-    let input_gain = db_to_linear(params.audio_thread_parameters[Parameter::<InputGain, Range>::ID] as f64);
-    let output_gain = db_to_linear(params.audio_thread_parameters[Parameter::<OutputGain, Range>::ID] as f64);
+    let snapshot = audio_thread.param_snapshot.load();
+
+    let input_gain = db_to_linear(snapshot.values[Parameter::<InputGain, Range>::ID] as f64);
+    let output_gain = db_to_linear(snapshot.values[Parameter::<OutputGain, Range>::ID] as f64);
 
     let input_slice = unsafe { std::slice::from_raw_parts(input, nframes) };
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output, nframes) };
 
+    // 1. Apply input gain
     for i in 0..nframes {
-        plugin.state.conversion_input_buf[i] = input_slice[i] as f64 * input_gain;
+        audio_thread.input_buf[i] = input_slice[i] as f64 * input_gain;
     }
 
-    if let Some(model) = plugin.state.nam_model.as_mut() {
+    if let Some(nam_model) = audio_thread.nam_model.as_mut() {
+        // 2. Process with NAM
         nam::ffi::dsp_process(
-            model.pin_mut(),
-            &plugin.state.conversion_input_buf[..nframes],
-            &mut plugin.state.conversion_output_buf[..nframes],
+            nam_model.pin_mut(),
+            &audio_thread.input_buf[..nframes],
+            &mut audio_thread.output_buf[..nframes],
         );
 
+        // 3. DC Filter and output gain
         for i in 0..nframes {
-            output_slice[i] = (plugin.state.conversion_output_buf[i] * output_gain) as f32;
+            let dc_filtered_sample = audio_thread.dc_filter.process_sample(audio_thread.output_buf[i]);
+            output_slice[i] = (dc_filtered_sample * output_gain) as f32;
         }
     } else {
         output_slice.copy_from_slice(input_slice);

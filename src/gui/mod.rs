@@ -3,8 +3,6 @@ pub mod colors;
 pub mod composition;
 pub mod gpu;
 pub mod helpers;
-pub mod parameter;
-pub mod parameters;
 pub mod platform;
 pub mod view;
 pub mod widget;

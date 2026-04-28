@@ -7,8 +7,9 @@ use blitz_traits::shell::Viewport;
 use vello::Scene;
 
 use crate::{
-    gui::{composition, parameters::any::PARAMS_COUNT, widget::Widget},
-    state::GUIState,
+    gui::{composition, widget::Widget},
+    parameters::any::PARAMS_COUNT,
+    state::GUIShared,
 };
 
 pub struct View {
@@ -48,7 +49,7 @@ impl View {
         self.pointer = (x, y);
     }
 
-    pub fn render(&mut self, scene: &mut Scene, state: &GUIState, parameters_values: &[f32; PARAMS_COUNT]) {
+    pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f32; PARAMS_COUNT]) {
         self.doc.resolve(0.0);
 
         let viewport = self.doc.viewport();

@@ -1,34 +1,29 @@
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
-
-use arc_swap::ArcSwap;
-use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
-use vello::{Scene, kurbo::Affine};
-
 use crate::{
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{gpu::Gpu, parameters::any::PARAMS_COUNT, platform::set_window_background_color, view::View},
-    state::{GUIState, PluginParameters},
+    gui::{gpu::Gpu, platform::set_window_background_color, view::View},
+    state::{GUIShared, ParamChange, ParamSnapshot},
 };
+use arc_swap::ArcSwap;
+use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
+use rtrb::Producer;
+use std::{sync::Arc, time::Instant};
+use vello::{Scene, kurbo::Affine};
 
 pub struct WindowHandler {
     gpu: Option<Gpu>,
+    width: u32,
+    height: u32,
+    scale: f64,
 
-    gui: View,
-    gui_state: Arc<GUIState>,
+    view: View,
 
-    parameters_rx: Arc<ArcSwap<PluginParameters>>,
-    parameters_wx: Arc<Mutex<PluginParameters>>,
+    gui_shared: Arc<ArcSwap<GUIShared>>,
+    gui_changes_tx: Producer<ParamChange>,
+    params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
     cursor_drag: Option<ActiveDrag>,
     cursor_pos: baseview::Point,
     cursor_last_click: Option<(Instant, usize)>,
-
-    width: u32,
-    height: u32,
-    scale: f64,
 }
 
 impl WindowHandler {
@@ -36,24 +31,26 @@ impl WindowHandler {
         window: &mut Window,
         width: u32,
         height: u32,
-        parameters_rx: Arc<ArcSwap<PluginParameters>>,
-        parameters_wx: Arc<Mutex<PluginParameters>>,
-        gui_state: Arc<GUIState>,
+        gui_shared: Arc<ArcSwap<GUIShared>>,
+        gui_changes_tx: Producer<ParamChange>,
+        params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
     ) -> Self {
         set_window_background_color(window);
 
         Self {
             gpu: Gpu::new(window, width, height),
-            gui: View::new(width as f32, height as f32),
-            gui_state,
-            parameters_rx,
-            parameters_wx,
-            cursor_pos: baseview::Point::new(0.0, 0.0),
-            cursor_last_click: None,
-            cursor_drag: None,
+            view: View::new(width as f32, height as f32),
             width,
             height,
             scale: 1.0,
+
+            gui_shared,
+            gui_changes_tx,
+            params_snapshot,
+
+            cursor_pos: baseview::Point::new(0.0, 0.0),
+            cursor_last_click: None,
+            cursor_drag: None,
         }
     }
 }
@@ -65,41 +62,14 @@ impl BaseWindowHandlers for WindowHandler {
             None => return,
         };
 
-        let params = self.parameters_rx.load();
+        let snapshot = self.params_snapshot.load();
+        let gui_shared = self.gui_shared.load();
 
-        // Resolve the display value for each parameter.
-        //
-        // Two authoritative sources can diverge at any moment:
-        //
-        //   main_thread_parameters   — written by the UI (user dragging a knob).
-        //                              Flagged with `main_thread_parameters_changed[i] = true`
-        //                              until sync_main_to_audio() propagates it to the audio
-        //                              thread on the next process() cycle.
-        //
-        //   audio_thread_parameters  — written by the audio thread, either when it flushes
-        //                              a pending UI change, or directly via host automation /
-        //                              MIDI with no UI involvement.
-        //
-        // Rule: prefer main_thread when the user has a pending change (changed[i] == true)
-        // so the knob tracks the drag in real time. Otherwise defer to audio_thread, which
-        // is the source of truth for host automation and parameter recall.
-        //
-        // WARNING: do not simplify this to always read one side.
-        //   - Always audio  → knob freezes while dragging (lags one process() cycle behind).
-        //   - Always main   → host automation and preset recall are never shown in the UI.
-        let curr_params_values: [f32; PARAMS_COUNT] = std::array::from_fn(|i| {
-            if params.main_thread_parameters_changed[i] {
-                params.main_thread_parameters[i]
-            } else {
-                params.audio_thread_parameters[i]
-            }
-        });
-
-        self.gui
+        self.view
             .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
 
         let mut gui_scene = Scene::new();
-        self.gui.render(&mut gui_scene, &self.gui_state, &curr_params_values);
+        self.view.render(&mut gui_scene, &gui_shared, &snapshot.values);
 
         let mut scene = Scene::new();
         scene.append(&gui_scene, Some(Affine::scale(self.scale)));
@@ -114,7 +84,7 @@ impl BaseWindowHandlers for WindowHandler {
                 let x = self.cursor_pos.x as f32;
                 let y = self.cursor_pos.y as f32;
 
-                let Some(index) = self.gui.element_at_pointer() else {
+                let Some(index) = self.view.element_at_pointer() else {
                     return EventStatus::Captured;
                 };
 
@@ -128,31 +98,18 @@ impl BaseWindowHandlers for WindowHandler {
                 if is_double_click {
                     if let Some(clickable) = ActiveClick::from_index(index) {
                         if let Some(change) = clickable.on_double_click() {
-                            if let Ok(mut params) = self.parameters_wx.try_lock() {
-                                params.main_thread_parameters[change.index] = change.value;
-                                params.main_thread_parameters_changed[change.index] = true;
-                                self.parameters_rx.store(Arc::new(*params));
-                            }
+                            let _ = self.gui_changes_tx.push(ParamChange {
+                                id: change.index,
+                                value: change.value,
+                            });
                         }
+
                         return EventStatus::Captured;
                     }
                 }
 
                 self.cursor_last_click = Some((now, index));
-
-                let params = self.parameters_rx.load();
-
-                // Same source-of-truth rule as in on_frame: if the UI has a pending
-                // change for this parameter, use it as the drag start value so the
-                // drag begins from where the knob visually is, not from a stale
-                // audio-thread value that hasn't been acknowledged yet.
-                let value = if params.main_thread_parameters_changed[index] {
-                    params.main_thread_parameters[index]
-                } else {
-                    params.audio_thread_parameters[index]
-                };
-
-                self.cursor_drag = ActiveDrag::from_index(index, x, y, value);
+                self.cursor_drag = ActiveDrag::from_index(index, x, y, self.params_snapshot.load().values[index]);
 
                 EventStatus::Captured
             }
@@ -167,11 +124,10 @@ impl BaseWindowHandlers for WindowHandler {
 
                 if let Some(cursor_drag) = &self.cursor_drag {
                     if let Some(change) = cursor_drag.on_drag(position.x as f32, position.y as f32) {
-                        if let Ok(mut params) = self.parameters_wx.try_lock() {
-                            params.main_thread_parameters[change.index] = change.value;
-                            params.main_thread_parameters_changed[change.index] = true;
-                            self.parameters_rx.store(Arc::new(*params));
-                        }
+                        let _ = self.gui_changes_tx.push(ParamChange {
+                            id: change.index,
+                            value: change.value,
+                        });
                     }
                 }
 
@@ -181,9 +137,10 @@ impl BaseWindowHandlers for WindowHandler {
                 self.width = info.physical_size().width;
                 self.height = info.physical_size().height;
                 self.scale = info.scale();
-                self.gui
+                self.view
                     .set_dimensions(self.width as f32 / self.scale as f32, self.height as f32 / self.scale as f32);
                 self.gpu = Gpu::new(window, self.width, self.height);
+
                 EventStatus::Ignored
             }
             _ => EventStatus::Ignored,

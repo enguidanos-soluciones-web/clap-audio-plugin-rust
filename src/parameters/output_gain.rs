@@ -1,11 +1,9 @@
+use super::{
+    PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
+};
 use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
-use crate::gui::{
-    parameter::{
-        PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
-    },
-    widget::Widget,
-};
+use crate::gui::widget::Widget;
 use std::f64::consts::PI;
 use vello::{
     Scene,
@@ -14,19 +12,19 @@ use vello::{
 };
 
 #[derive(Clone, Copy)]
-pub struct InputGain;
+pub struct OutputGain;
 
-impl Parameter<InputGain, Range> {
-    pub const ID: usize = 0;
+impl Parameter<OutputGain, Range> {
+    pub const ID: usize = 1;
 
     pub fn new() -> Self {
         Self {
             id: Self::ID,
-            name: "Input Gain",
+            name: "Output Gain",
             gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
             behave: Range {
-                min: -20.0,
-                max: 20.0,
+                min: -10.0,
+                max: 10.0,
                 def: 0.0,
             },
             _marker_type: std::marker::PhantomData,
@@ -34,25 +32,25 @@ impl Parameter<InputGain, Range> {
         }
     }
 
-    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, InputGain, Range>> {
+    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, OutputGain, Range>> {
         if self.gestures & PARAMETER_GESTURE_DRAG != 0 {
-            Some(ParameterDraggable::<InputGain, Range>::new(self))
+            Some(ParameterDraggable::<OutputGain, Range>::new(self))
         } else {
             None
         }
     }
 
-    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, InputGain, Range>> {
+    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, OutputGain, Range>> {
         if self.gestures & PARAMETER_GESTURE_CLICK != 0 {
-            Some(ParameterClickable::<InputGain, Range>::new(self))
+            Some(ParameterClickable::<OutputGain, Range>::new(self))
         } else {
             None
         }
     }
 }
 
-impl<'a> ParameterDraggable<'a, InputGain, Range> {
-    pub fn new(inner: &'a Parameter<InputGain, Range>) -> Self {
+impl<'a> ParameterDraggable<'a, OutputGain, Range> {
+    pub fn new(inner: &'a Parameter<OutputGain, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -81,8 +79,8 @@ impl<'a> ParameterDraggable<'a, InputGain, Range> {
     }
 }
 
-impl<'a> ParameterClickable<'a, InputGain, Range> {
-    pub fn new(inner: &'a Parameter<InputGain, Range>) -> Self {
+impl<'a> ParameterClickable<'a, OutputGain, Range> {
+    pub fn new(inner: &'a Parameter<OutputGain, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -98,9 +96,9 @@ impl<'a> ParameterClickable<'a, InputGain, Range> {
     }
 }
 
-impl Widget for Parameter<InputGain, Range> {
+impl Widget for Parameter<OutputGain, Range> {
     fn element_id(&self) -> &'static str {
-        "input-gain"
+        "output-gain"
     }
 
     fn param_id(&self) -> usize {

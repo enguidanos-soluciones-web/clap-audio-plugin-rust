@@ -6,13 +6,14 @@ pub mod clap {
 }
 
 mod descriptor;
+mod dsp;
 mod entry;
 mod extensions;
 mod factory;
 mod gestures;
 mod gui;
 mod helper;
-mod nam;
+mod parameters;
 mod plugin;
 mod processors;
 mod state;

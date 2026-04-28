@@ -1,15 +1,12 @@
 use crate::{
-    gui::{
-        parameter::{Parameter, Range},
-        parameters::{any::PARAMS_COUNT, input_gain::InputGain, output_gain::OutputGain},
-        view::View,
-    },
-    state::GUIState,
+    gui::view::View,
+    parameters::{Parameter, Range, any::PARAMS_COUNT, input_gain::InputGain, output_gain::OutputGain},
+    state::GUIShared,
 };
 use vello::Scene;
 
-pub fn compose(view: &mut View, scene: &mut Scene, state: &GUIState, parameters_values: &[f32; PARAMS_COUNT]) {
-    if let Some(nam_model_rate) = state.nam_model_rate() {
+pub fn compose(view: &mut View, scene: &mut Scene, state: &GUIShared, parameters_values: &[f32; PARAMS_COUNT]) {
+    if let Some(nam_model_rate) = state.nam_model_rate {
         if let Some(span) = view.doc.get_element_by_id("nam-model-rate") {
             let mut mutator = view.doc.mutate();
             mutator.remove_and_drop_all_children(span);
