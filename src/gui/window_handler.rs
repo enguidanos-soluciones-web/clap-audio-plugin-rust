@@ -10,6 +10,7 @@ use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent,
 use std::{sync::Arc, time::Instant};
 use vello::{Scene, kurbo::Affine};
 
+
 pub struct WindowHandler {
     gpu: Option<Gpu>,
     width: u32,
@@ -22,6 +23,9 @@ pub struct WindowHandler {
     gui_shared: Arc<ArcSwap<GUIShared>>,
     gui_changes: Sender<ParamChange>,
     params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
+
+    content_scene: Scene,
+    display_scene: Scene,
 
     cursor_drag: Option<ActiveDrag>,
     cursor_pos: baseview::Point,
@@ -55,6 +59,9 @@ impl WindowHandler {
             gui_changes,
             params_snapshot,
 
+            content_scene: Scene::default(),
+            display_scene: Scene::default(),
+
             cursor_pos: baseview::Point::new(0.0, 0.0),
             cursor_last_click: None,
             cursor_drag: None,
@@ -83,12 +90,12 @@ impl BaseWindowHandlers for WindowHandler {
         self.view
             .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
 
-        let mut gui_scene = Scene::new();
-        self.view.render(&mut gui_scene, &gui_shared, &snapshot.values);
+        self.content_scene.reset();
+        self.view.render(&mut self.content_scene, &gui_shared, &snapshot.values);
 
-        let mut scene = Scene::new();
-        scene.append(&gui_scene, Some(Affine::scale(self.scale)));
-        gpu.render(&scene, self.width, self.height);
+        self.display_scene.reset();
+        self.display_scene.append(&self.content_scene, Some(Affine::scale(self.scale)));
+        gpu.render(&self.display_scene, self.width, self.height);
     }
 
     fn on_event(&mut self, window: &mut Window, event: Event) -> EventStatus {

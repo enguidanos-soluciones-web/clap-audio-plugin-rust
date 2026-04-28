@@ -1,4 +1,47 @@
+// Thread and channel architecture
+//
+//  ┌─────────────────────────────────────────────────────────────────────────────────┐
+//  │ GUI THREAD  (baseview)                                                          │
+//  │  WindowHandler                                                                  │
+//  │  · on_frame  — reads  param_snapshot (ArcSwap, lock-free)                       │
+//  │  · on_event  — writes gui_changes Sender<ParamChange>                           │
+//  │              — calls  host.request_callback() [thread-safe]                     │
+//  └──────────────────────────────┬──────────────────────────────────────────────────┘
+//                                 │ gui_changes
+//                                 │ Sender<ParamChange>  ───────────────────────────-┐
+//                                 ▼                                                  │
+//  ┌─────────────────────────────────────────────────────────────────────────────────┤
+//  │ MAIN THREAD  (host-managed)                                                     │
+//  │  on_main_thread()                                                               │
+//  │  · drains gui_changes  Receiver<ParamChange>  → updates param_snapshot          │
+//  │                                               → pushes  param_changes           │
+//  │  · drains daw_events   Receiver<ParamEvent>                                     │
+//  │      Automation  → updates param_snapshot                                       │
+//  │      Ack         → (no-op)                                                      │
+//  │      Nack        → requeues into param_changes                                  │
+//  └──────────────────────────────┬──────────────────────────────────────────────────┘
+//                                 │ param_changes
+//                                 │ Sender<ParamChange>  ─────────────────────────── ┐
+//                                 ▼                                                  │
+//  ┌─────────────────────────────────────────────────────────────────────────────────┤
+//  │ AUDIO THREAD  (host-managed, real-time)                                         │
+//  │  process()                                                                      │
+//  │  · sync_main_to_audio — drains param_changes Receiver<ParamChange>              │
+//  │                       — emits  CLAP_EVENT_PARAM_VALUE → host out_events         │
+//  │                       — pushes daw_events Sender<ParamEvent> (Ack / Nack)       │
+//  │  · handle_clap_event  — reads  CLAP_EVENT_PARAM_VALUE from host in_events       │
+//  │                       — pushes daw_events Sender<ParamEvent> (Automation)       │
+//  │                       — calls  host.request_callback() [thread-safe]            │
+//  │  · render_audio       — reads  param_snapshot (ArcSwap, lock-free)              │
+//  └─────────────────────────────────────────────────────────────────────────────────┘
+//
+//  Shared state (Arc<ArcSwap<ParamSnapshot>>)
+//  · written by main thread  in on_main_thread()
+//  · read    by audio thread in render_audio()        (lock-free load)
+//  · read    by GUI thread   in on_frame()            (lock-free load)
+
 use crate::{
+    channel::channel,
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
     dsp::{self, dc_filter::DcFilter},
@@ -6,7 +49,6 @@ use crate::{
     parameters::any::PARAMS_COUNT,
     plugin,
     processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
-    channel::channel,
     state::{AudioThreadState, MainThreadState, ParamChange, ParamEvent, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
@@ -43,9 +85,9 @@ pub const PLUGIN_CLASS: clap_plugin_t = clap_plugin_t {
 pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
-    let (param_changes_tx, _param_changes_rx) = channel::<ParamChange>(64);
-    let (_daw_events_tx, daw_events_rx) = channel::<ParamEvent>(64);
-    let (_gui_changes_tx, gui_changes_rx) = channel::<ParamChange>(64);
+    let (param_changes_tx, _) = channel::<ParamChange>(64);
+    let (_, daw_events_rx) = channel::<ParamEvent>(64);
+    let (_, gui_changes_rx) = channel::<ParamChange>(64);
 
     let param_snapshot = Arc::new(ArcSwap::new(Arc::new(ParamSnapshot {
         values: [0.0f32; PARAMS_COUNT],
