@@ -1,17 +1,16 @@
 {
-  "name": "clap-audio-plugin",
+  "name": "neural-amp-modeler",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "description": "Unofficial CrossPlatform Neural Amp Modeler Plugin",
+  "engineStrict": true,
+  "engines": {
+    "node": "24.14.1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Cristian Alejandro Enguídanos Nebot",
+  "license": "MIT",
   "packageManager": "pnpm@10.33.2",
   "dependencies": {
-    "@tailwindcss/cli": "^4.2.4",
-    "tailwindcss": "^4.2.4"
+    "@tailwindcss/cli": "4.2.4",
+    "tailwindcss": "4.2.4"
   }
 }

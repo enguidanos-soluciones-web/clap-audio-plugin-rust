@@ -1,5 +1,5 @@
-plugin_name := "marshallian"
-lib_name    := "marshallian"
+plugin_name := "neural_amp_modeler"
+lib_name    := "neural_amp_modeler"
 
 build_dir   := "target/release"
 
@@ -43,9 +43,9 @@ _plist:
     <plist version="1.0">
     <dict>
         <key>CFBundleExecutable</key>
-        <string>marshallian</string>
+        <string>Neural Amp Modeler</string>
         <key>CFBundleIdentifier</key>
-        <string>com.enguidanosweb.Marshallian</string>
+        <string>com.enguidanosweb.NeuralAmpModeler</string>
         <key>CFBundleVersion</key>
         <string>0.0.1</string>
         <key>CFBundlePackageType</key>
