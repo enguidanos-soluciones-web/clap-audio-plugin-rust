@@ -1,3 +1,5 @@
+### Dependencies
+
 ```bash
 git submodule update --init --recursive
 
@@ -11,7 +13,7 @@ git checkout tags/v0.5.1
 ### Dev
 
 ```bash
-RUST_BACKTRACE=full watchexec -r -e html,css,rs -- just dev
+RUST_BACKTRACE=full watchexec -r -e html,css,rs -- just build
 ```
 
 ### Build
