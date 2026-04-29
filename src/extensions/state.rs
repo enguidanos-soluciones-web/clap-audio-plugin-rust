@@ -20,18 +20,27 @@ pub extern "C" fn save(plugin: *const clap_plugin_t, stream: *const clap_ostream
 
     let snapshot = main.param_snapshot.load();
 
-    let total = std::mem::size_of::<f64>() * PARAMS_COUNT;
-    let buf = unsafe { std::slice::from_raw_parts(snapshot.values.as_ptr() as *const u8, total) };
-    let mut offset = 0;
-    while offset < total {
-        let n = unsafe { write(stream, buf.as_ptr().add(offset) as *const c_void, (total - offset) as u64) };
-        if n <= 0 {
-            break;
+    let write_all = |buf: &[u8]| -> bool {
+        let mut offset = 0;
+        while offset < buf.len() {
+            let n = unsafe { write(stream, buf.as_ptr().add(offset) as *const c_void, (buf.len() - offset) as u64) };
+            if n <= 0 { return false; }
+            offset += n as usize;
         }
-        offset += n as usize;
-    }
+        true
+    };
 
-    offset == total
+    let values_bytes = unsafe {
+        std::slice::from_raw_parts(snapshot.values.as_ptr() as *const u8, std::mem::size_of::<f64>() * PARAMS_COUNT)
+    };
+    if !write_all(values_bytes) { return false; }
+
+    let path = main.selected_model_path.as_deref().unwrap_or("");
+    let path_len = (path.len() as u32).to_le_bytes();
+    if !write_all(&path_len) { return false; }
+    if !write_all(path.as_bytes()) { return false; }
+
+    true
 }
 
 // [main-thread]
@@ -46,33 +55,36 @@ pub extern "C" fn load(plugin: *const clap_plugin_t, stream: *const clap_istream
         return false;
     };
 
+    let read_all = |buf: &mut [u8]| -> bool {
+        let mut offset = 0;
+        while offset < buf.len() {
+            let n = unsafe { read(stream, buf.as_mut_ptr().add(offset) as *mut c_void, (buf.len() - offset) as u64) };
+            if n <= 0 { return false; }
+            offset += n as usize;
+        }
+        true
+    };
+
     let mut new_snapshot = *main_thread.param_snapshot.load_full();
+    let values_bytes = unsafe {
+        std::slice::from_raw_parts_mut(new_snapshot.values.as_mut_ptr() as *mut u8, std::mem::size_of::<f64>() * PARAMS_COUNT)
+    };
+    if !read_all(values_bytes) { return false; }
 
-    let total = std::mem::size_of::<f64>() * PARAMS_COUNT;
-    let buf = unsafe { std::slice::from_raw_parts_mut(new_snapshot.values.as_mut_ptr() as *mut u8, total) };
-    let mut offset = 0;
-    while offset < total {
-        let n = unsafe { read(stream, buf.as_mut_ptr().add(offset) as *mut c_void, (total - offset) as u64) };
-        if n <= 0 {
-            break;
-        }
-        offset += n as usize;
+    main_thread.param_snapshot.store(Arc::new(new_snapshot));
+    for id in 0..PARAMS_COUNT {
+        let _ = main_thread.param_changes.push(ParamChange { id, value: new_snapshot.values[id] });
     }
 
-    let success = offset == total;
-
-    if success {
-        // Pub new snapshot with loaded values
-        main_thread.param_snapshot.store(Arc::new(new_snapshot));
-
-        // Propagate all the params into audio-thread
-        for id in 0..PARAMS_COUNT {
-            let _ = main_thread.param_changes.push(ParamChange {
-                id,
-                value: new_snapshot.values[id],
-            });
+    // Read model path (optional — older state blobs without path are still valid).
+    let mut len_buf = [0u8; 4];
+    if read_all(&mut len_buf) {
+        let path_len = u32::from_le_bytes(len_buf) as usize;
+        let mut path_bytes = vec![0u8; path_len];
+        if read_all(&mut path_bytes) {
+            main_thread.selected_model_path = String::from_utf8(path_bytes).ok().filter(|s| !s.is_empty());
         }
     }
 
-    success
+    true
 }

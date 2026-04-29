@@ -61,12 +61,12 @@ impl View {
     pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
         // 1. Mutate DOM text nodes only when values changed
         let prev_params = self.prev_params;
-        let prev_gui_shared = self.prev_gui_shared;
+        let prev_gui_shared = self.prev_gui_shared.clone();
         let dom_mutated = composition::update_dom(self, state, parameters_values, &prev_gui_shared, &prev_params);
 
         if dom_mutated {
             self.prev_params = *parameters_values;
-            self.prev_gui_shared = *state;
+            self.prev_gui_shared = state.clone();
         }
 
         // 2. Recompute CSS layout only when DOM is dirty (mutation or resize)

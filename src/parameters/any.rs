@@ -1,13 +1,14 @@
-use super::{Parameter, Range};
-use crate::parameters::{blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone};
+use super::{Action, Parameter, Range};
+use crate::parameters::{blend::Blend, input_gain::InputGain, load_model::LoadModel, output_gain::OutputGain, tone::Tone};
 
-pub const PARAMS_COUNT: usize = 4;
+pub const PARAMS_COUNT: usize = 5;
 
 pub enum AnyParameter {
     InputGain { inner: Parameter<InputGain, Range> },
     OutputGain { inner: Parameter<OutputGain, Range> },
     Tone { inner: Parameter<Tone, Range> },
     Blend { inner: Parameter<Blend, Range> },
+    LoadModel { inner: Parameter<LoadModel, Action> },
 }
 
 impl TryFrom<usize> for AnyParameter {
@@ -26,6 +27,9 @@ impl TryFrom<usize> for AnyParameter {
             }),
             Parameter::<Blend, Range>::ID => Ok(AnyParameter::Blend {
                 inner: Parameter::<Blend, Range>::new(),
+            }),
+            Parameter::<LoadModel, Action>::ID => Ok(AnyParameter::LoadModel {
+                inner: Parameter::<LoadModel, Action>::new(),
             }),
             _ => Err(()),
         }

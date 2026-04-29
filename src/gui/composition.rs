@@ -1,6 +1,9 @@
 use crate::{
     gui::view::View,
-    parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
+    parameters::{
+        Action, Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, load_model::LoadModel, output_gain::OutputGain,
+        tone::Tone,
+    },
     state::GUIShared,
 };
 use vello::Scene;
@@ -24,6 +27,18 @@ pub fn update_dom(
                 mutator.append_children(span, &[text]);
                 dirty = true;
             }
+        }
+    }
+
+    if state.model_name != prev_state.model_name {
+        if let Some(span) = view.doc.get_element_by_id("model-name") {
+            let mut mutator = view.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            if let Some(name) = &state.model_name {
+                let text = mutator.create_text_node(name);
+                mutator.append_children(span, &[text]);
+            }
+            dirty = true;
         }
     }
 
@@ -76,6 +91,9 @@ pub fn update_dom(
 
 /// Draws widget shapes into the Vello scene (pure vector, no DOM involved).
 pub fn draw_widgets(view: &mut View, scene: &mut Scene, parameters_values: &[f64; PARAMS_COUNT]) {
+    // LoadModel uses default no-op draw — called only for pointer hit-testing.
+    view.draw_widget(scene, &Parameter::<LoadModel, Action>::new(), 0.0);
+
     view.draw_widget(
         scene,
         &Parameter::<InputGain, Range>::new(),

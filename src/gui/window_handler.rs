@@ -3,7 +3,7 @@ use crate::{
     clap::clap_host_t,
     gestures::{click::ActiveClick, drag::ActiveDrag},
     gui::{gpu::Gpu, platform::set_window_background_color, view::View},
-    state::{GUIShared, ParamChange, ParamSnapshot},
+    state::{GUIShared, GuiRequest, ParamChange, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
 use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent, WindowHandler as BaseWindowHandlers};
@@ -21,6 +21,7 @@ pub struct WindowHandler {
     host: *const clap_host_t,
     gui_shared: Arc<ArcSwap<GUIShared>>,
     gui_changes: Sender<ParamChange>,
+    gui_requests: Sender<GuiRequest>,
     params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
     content_scene: Scene,
@@ -42,6 +43,7 @@ impl WindowHandler {
         host: *const clap_host_t,
         gui_shared: Arc<ArcSwap<GUIShared>>,
         gui_changes: Sender<ParamChange>,
+        gui_requests: Sender<GuiRequest>,
         params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
     ) -> Self {
         set_window_background_color(window);
@@ -56,6 +58,7 @@ impl WindowHandler {
             host,
             gui_shared,
             gui_changes,
+            gui_requests,
             params_snapshot,
 
             content_scene: Scene::default(),
@@ -111,6 +114,16 @@ impl BaseWindowHandlers for WindowHandler {
 
                 let now = Instant::now();
 
+                // Single-click: fire actions (e.g. open file browser). Actions do not
+                // participate in double-click or drag, so return immediately.
+                if let Some(clickable) = ActiveClick::from_index(index) {
+                    if let Some(request) = clickable.on_single_click() {
+                        let _ = self.gui_requests.push(request);
+                        self.request_host_callback();
+                        return EventStatus::Captured;
+                    }
+                }
+
                 let is_double_click = self
                     .cursor_last_click
                     .take()
@@ -131,7 +144,10 @@ impl BaseWindowHandlers for WindowHandler {
                 }
 
                 self.cursor_last_click = Some((now, index));
-                self.cursor_drag = ActiveDrag::from_index(index, x, y, self.params_snapshot.load().values[index]);
+
+                let snapshot = self.params_snapshot.load();
+                let raw = snapshot.values.get(index).copied().unwrap_or(0.0);
+                self.cursor_drag = ActiveDrag::from_index(index, x, y, raw);
 
                 EventStatus::Captured
             }

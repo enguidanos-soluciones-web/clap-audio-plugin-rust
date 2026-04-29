@@ -203,6 +203,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let params_snapshot = Arc::clone(&main_thread.param_snapshot);
     let gui_shared = Arc::clone(&main_thread.gui_shared);
     let gui_changes = main_thread.gui_changes.new_sender();
+    let gui_requests = main_thread.gui_requests.new_sender();
 
     let handle = Window::open_parented(
         &raw_parent_window,
@@ -219,6 +220,7 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
                 host_addr as *const clap_host_t,
                 gui_shared,
                 gui_changes,
+                gui_requests,
                 params_snapshot,
             )
         },

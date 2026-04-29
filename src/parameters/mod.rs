@@ -1,13 +1,20 @@
 pub mod any;
 pub mod blend;
 pub mod input_gain;
+pub mod load_model;
 pub mod output_gain;
 pub mod tone;
 
 use std::marker::PhantomData;
 
 pub const PARAMETER_GESTURE_DRAG: u8 = 1 << 0;
-pub const PARAMETER_GESTURE_CLICK: u8 = 1 << 1;
+pub const PARAMETER_GESTURE_DOUBLE_CLICK: u8 = 1 << 1;
+pub const PARAMETER_GESTURE_SINGLE_CLICK: u8 = 1 << 2;
+
+/// Marker behaviour for parameters that trigger a one-shot GUI action on a single click.
+/// Unlike `Range`, there is no min/max/default value.
+#[derive(Clone, Copy)]
+pub struct Action;
 
 pub struct ProposedParamChange {
     pub index: usize,

@@ -1,5 +1,5 @@
 use super::{
-    PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
+    PARAMETER_GESTURE_DOUBLE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
 };
 use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
@@ -21,7 +21,7 @@ impl Parameter<Blend, Range> {
         Self {
             id: Self::ID,
             name: "Blend",
-            gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
+            gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_DOUBLE_CLICK,
             behave: Range { min: 0., max: 1., def: 1. },
             _marker_type: std::marker::PhantomData,
             _marker_behaviour: std::marker::PhantomData,
@@ -37,7 +37,7 @@ impl Parameter<Blend, Range> {
     }
 
     pub fn as_clickable(&self) -> Option<ParameterClickable<'_, Blend, Range>> {
-        if self.gestures & PARAMETER_GESTURE_CLICK != 0 {
+        if self.gestures & PARAMETER_GESTURE_DOUBLE_CLICK != 0 {
             Some(ParameterClickable::<Blend, Range>::new(self))
         } else {
             None

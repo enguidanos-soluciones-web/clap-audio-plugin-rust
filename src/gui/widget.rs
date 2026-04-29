@@ -5,7 +5,11 @@ pub trait Widget {
 
     fn param_id(&self) -> usize;
 
-    fn normalize(&self, raw: f64) -> f64;
+    /// Maps a raw parameter value to `[0.0, 1.0]`. Defaults to identity — override for
+    /// widgets whose raw range differs from `[0.0, 1.0]`.
+    fn normalize(&self, raw: f64) -> f64 {
+        raw
+    }
 
     /// Paint the widget into `scene`.
     ///
@@ -13,5 +17,7 @@ pub trait Widget {
     /// - `width`, `height` — size of that rect in pixels.
     /// - `normalized`  — parameter value mapped to `[0.0, 1.0]` via [`Widget::normalize`].
     ///                   Implementations use this to position indicators (e.g. knob angle, fader pos).
-    fn draw(&self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64, normalized: f64);
+    ///
+    /// Defaults to a no-op — override for widgets that need Vello rendering.
+    fn draw(&self, _scene: &mut Scene, _x: f64, _y: f64, _width: f64, _height: f64, _normalized: f64) {}
 }

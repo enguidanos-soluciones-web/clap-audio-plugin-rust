@@ -54,7 +54,7 @@ use crate::{
         render_audio::{render_audio_f32, render_audio_f64},
         sync_main_to_audio::sync_main_to_audio,
     },
-    state::{AudioThreadState, MainThreadState, ParamChange, ParamEvent, ParamSnapshot},
+    state::{AudioThreadState, GuiRequest, MainThreadState, ModelUpdate, ParamChange, ParamEvent, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
 use std::{
@@ -62,7 +62,6 @@ use std::{
     sync::Arc,
 };
 
-const MODEL_JSON: &str = include_str!("../models/amp_clean.nam");
 
 pub struct Plugin {
     pub inner: clap_plugin_t,
@@ -98,6 +97,9 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
         values: [0.0; PARAMS_COUNT],
     })));
 
+    let (model_updates_tx, _model_updates_rx) = channel::<ModelUpdate>(1);
+    let (_, gui_requests_rx) = channel::<GuiRequest>(4);
+
     plugin_ref.main_thread = Some(MainThreadState {
         param_snapshot,
         daw_events: daw_events_rx,
@@ -107,6 +109,9 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
         gui_window: None,
         gui_width: 800,
         gui_height: 400,
+        model_updates: model_updates_tx,
+        gui_requests: gui_requests_rx,
+        selected_model_path: None,
         thread_id: Some(std::thread::current().id()),
     });
 
@@ -143,30 +148,46 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let main_thread = plugin_ref.main_thread.as_mut().expect("main thread not initialized");
     main_thread.assert_main_thread();
 
-    let mut nam_model = dsp::nam::ffi::load(MODEL_JSON);
-    dsp::nam::ffi::reset_and_prewarm(nam_model.pin_mut(), sample_rate, max_frames_count as i32);
+    if let Some(path) = main_thread.selected_model_path.clone() {
+        if let Ok(json) = std::fs::read_to_string(&path) {
+            let model_name = std::path::Path::new(&path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&path)
+                .to_string();
 
-    const NAM_TARGET_LOUDNESS_DBFS: f64 = -12.0;
-    let mut nam_loudness_correction = 1.0;
-    if dsp::nam::ffi::has_loudness(&nam_model) {
-        let nam_loudness_model = dsp::nam::ffi::get_loudness(&nam_model);
-        nam_loudness_correction = db_to_linear(NAM_TARGET_LOUDNESS_DBFS - nam_loudness_model, DecibelConversion::Amplitude)
+            let mut nam_model = dsp::nam::ffi::load(&json);
+            dsp::nam::ffi::reset_and_prewarm(nam_model.pin_mut(), sample_rate, max_frames_count as i32);
+
+            const NAM_TARGET_LOUDNESS_DBFS: f64 = -12.0;
+            let loudness_correction = if dsp::nam::ffi::has_loudness(&nam_model) {
+                db_to_linear(NAM_TARGET_LOUDNESS_DBFS - dsp::nam::ffi::get_loudness(&nam_model), DecibelConversion::Amplitude)
+            } else {
+                1.0
+            };
+
+            let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json) as u64;
+
+            let mut new_gui_shared = main_thread.gui_shared.load_full().as_ref().clone();
+            new_gui_shared.nam_model_rate = Some(model_rate);
+            new_gui_shared.model_name = Some(model_name);
+            main_thread.gui_shared.store(Arc::new(new_gui_shared));
+
+            let _ = main_thread.model_updates.push(ModelUpdate { model: nam_model, loudness_correction });
+        }
     }
-
-    let mut new_gui_shared = *main_thread.gui_shared.load_full();
-    new_gui_shared.nam_model_rate = Some(dsp::nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON) as u64);
-    main_thread.gui_shared.store(Arc::new(new_gui_shared));
 
     plugin_ref.audio_thread = Some(AudioThreadState {
         host: plugin_ref.host,
         sample_rate,
-        nam_model: Some(nam_model),
-        nam_loudness_correction,
+        nam_model: None,
+        nam_loudness_correction: 1.0,
         dc_filter: DcFilter::new(20.0, sample_rate),
         klon_buffer: KlonBuffer::new(sample_rate),
         lowpass_filter: LowPassFilter::new(16.0, sample_rate),
         input_buf: vec![0.0; max_frames_count as usize],
         output_buf: vec![0.0; max_frames_count as usize],
+        model_updates: main_thread.model_updates.new_receiver(),
         param_snapshot: Arc::clone(&main_thread.param_snapshot),
         param_changes: main_thread.param_changes.new_receiver(),
         daw_events: main_thread.daw_events.new_sender(),
@@ -282,13 +303,59 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
                 new_snapshot.values[id] = value;
                 snapshot_dirty = true;
             }
-            ParamEvent::Ack => {
-                // Host accepted — nothing to do
-            }
+            ParamEvent::Ack => {}
             ParamEvent::Nack { id } => {
-                // Host rejected — requeue for the next iter
                 let value = new_snapshot.values[id];
                 let _ = main.param_changes.push(ParamChange { id, value });
+            }
+        }
+    }
+
+    // 3. GUI requests (e.g. open file browser to load a NAM model)
+    while let Some(request) = main.gui_requests.pop() {
+        match request {
+            GuiRequest::OpenFileBrowser => {
+                let Some(path) = rfd::FileDialog::new().add_filter("NAM model", &["nam"]).pick_file() else {
+                    continue;
+                };
+
+                let Ok(json) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+
+                let mut model = dsp::nam::ffi::load(&json);
+
+                const NAM_TARGET_LOUDNESS_DBFS: f64 = -12.0;
+                let loudness_correction = if dsp::nam::ffi::has_loudness(&model) {
+                    let model_loudness = dsp::nam::ffi::get_loudness(&model);
+                    db_to_linear(NAM_TARGET_LOUDNESS_DBFS - model_loudness, DecibelConversion::Amplitude)
+                } else {
+                    1.0
+                };
+
+                let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json) as u64;
+                let model_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+                main.selected_model_path = Some(path.to_string_lossy().into_owned());
+
+                // Reset and prewarm using the current audio thread sample rate and buffer size.
+                // If the audio thread is not yet active we skip — the model will be loaded fresh on activate().
+                if let Some(audio) = plugin_ref.audio_thread.as_mut() {
+                    dsp::nam::ffi::reset_and_prewarm(model.pin_mut(), audio.sample_rate, audio.input_buf.len() as i32);
+                } else {
+                    continue;
+                }
+
+                // Update GUI with new model info before pushing to audio thread.
+                let mut new_gui_shared = main.gui_shared.load_full().as_ref().clone();
+                new_gui_shared.nam_model_rate = Some(model_rate);
+                new_gui_shared.model_name = Some(model_name.clone());
+                main.gui_shared.store(Arc::new(new_gui_shared));
+
+                // Drain any stale pending model so the audio thread always gets the latest.
+                let _ = main.model_updates.push(ModelUpdate {
+                    model,
+                    loudness_correction,
+                });
             }
         }
     }

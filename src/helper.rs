@@ -2,6 +2,7 @@ use std::ffi::c_char;
 
 pub enum DecibelConversion {
     Amplitude,
+    #[allow(dead_code)]
     Power,
 }
 

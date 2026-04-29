@@ -1,5 +1,5 @@
 use super::{
-    PARAMETER_GESTURE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
+    PARAMETER_GESTURE_DOUBLE_CLICK, PARAMETER_GESTURE_DRAG, Parameter, ParameterClickable, ParameterDraggable, ProposedParamChange, Range,
 };
 use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
@@ -21,7 +21,7 @@ impl Parameter<OutputGain, Range> {
         Self {
             id: Self::ID,
             name: "Output Gain",
-            gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
+            gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_DOUBLE_CLICK,
             behave: Range {
                 min: -5.0,
                 max: 5.0,
@@ -41,7 +41,7 @@ impl Parameter<OutputGain, Range> {
     }
 
     pub fn as_clickable(&self) -> Option<ParameterClickable<'_, OutputGain, Range>> {
-        if self.gestures & PARAMETER_GESTURE_CLICK != 0 {
+        if self.gestures & PARAMETER_GESTURE_DOUBLE_CLICK != 0 {
             Some(ParameterClickable::<OutputGain, Range>::new(self))
         } else {
             None

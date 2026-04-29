@@ -5,8 +5,19 @@ use crate::{
     state::AudioThreadState,
 };
 
+fn apply_pending_model_update(audio_thread: &mut AudioThreadState) {
+    if let Some(update) = audio_thread.model_updates.pop() {
+        audio_thread.nam_model = Some(update.model);
+        audio_thread.nam_loudness_correction = update.loudness_correction;
+        audio_thread.dc_filter.reset();
+        audio_thread.klon_buffer.reset();
+        audio_thread.lowpass_filter.reset();
+    }
+}
+
 pub fn render_audio_f64(audio_thread: &mut AudioThreadState, input: *const f64, output: *mut f64, nframes: usize) {
     audio_thread.assert_audio_thread();
+    apply_pending_model_update(audio_thread);
 
     let snapshot = audio_thread.param_snapshot.load();
 
@@ -52,6 +63,7 @@ pub fn render_audio_f64(audio_thread: &mut AudioThreadState, input: *const f64, 
 
 pub fn render_audio_f32(audio_thread: &mut AudioThreadState, input: *const f32, output: *mut f32, nframes: usize) {
     audio_thread.assert_audio_thread();
+    apply_pending_model_update(audio_thread);
 
     let snapshot = audio_thread.param_snapshot.load();
 

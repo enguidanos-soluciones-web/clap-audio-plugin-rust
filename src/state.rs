@@ -8,6 +8,13 @@ use arc_swap::ArcSwap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+/// Requests sent from the GUI thread to the main thread.
+#[derive(Debug)]
+pub enum GuiRequest {
+    /// User clicked "Load Model" — main thread should open a file browser and load the selected NAM file.
+    OpenFileBrowser,
+}
+
 #[derive(Debug)]
 pub enum ParamEvent {
     Ack,
@@ -26,6 +33,17 @@ pub struct ParamSnapshot {
     pub values: [f64; PARAMS_COUNT],
 }
 
+/// Carries a fully-loaded NAM model from the main thread to the audio thread.
+pub struct ModelUpdate {
+    pub model: cxx::UniquePtr<nam::ffi::NamDsp>,
+    pub loudness_correction: f64,
+}
+
+// SAFETY: NamDsp is used across main/audio thread boundaries throughout this codebase
+// (created on main thread in activate(), used on audio thread in process()).
+// The same aliasing guarantees that make the existing code safe apply here.
+unsafe impl Send for ModelUpdate {}
+
 pub struct AudioThreadState {
     pub host: *const clap_host_t,
     pub sample_rate: f64,
@@ -39,6 +57,8 @@ pub struct AudioThreadState {
     pub dc_filter: DcFilter,
     pub klon_buffer: KlonBuffer,
     pub lowpass_filter: LowPassFilter,
+
+    pub model_updates: Receiver<ModelUpdate>,
 
     pub daw_events: Sender<ParamEvent>,
     pub param_changes: Receiver<ParamChange>,
@@ -81,6 +101,10 @@ pub struct MainThreadState {
     pub gui_width: u32,
     pub gui_height: u32,
 
+    pub model_updates: Sender<ModelUpdate>,
+    pub gui_requests: Receiver<GuiRequest>,
+    pub selected_model_path: Option<String>,
+
     pub thread_id: Option<std::thread::ThreadId>,
 }
 
@@ -94,7 +118,8 @@ impl MainThreadState {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct GUIShared {
     pub nam_model_rate: Option<u64>,
+    pub model_name: Option<String>,
 }
