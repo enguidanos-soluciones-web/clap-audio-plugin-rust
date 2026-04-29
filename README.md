@@ -1,3 +1,10 @@
+## Unofficial Cross Platform Neural Amp Modeler Plugin
+
+> MacOS, Windows and Linux
+> Tested in MacOS and Linux with REAPER
+
+![screenshot](./docs/screenshot.png)
+
 ### Dependencies
 
 ```bash
