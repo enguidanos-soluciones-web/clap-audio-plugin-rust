@@ -17,12 +17,6 @@ cd external/neural-amp-modeler-0.5.1
 git checkout tags/v0.5.1
 ```
 
-### Dev
-
-```bash
-RUST_BACKTRACE=full watchexec -r -e html,css,rs -- just build
-```
-
 ### Build
 
 ```bash
