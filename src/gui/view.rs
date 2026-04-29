@@ -14,16 +14,16 @@ use crate::{
 
 pub struct View {
     pub doc: HtmlDocument,
-    pub pointer: (f32, f32),
+    pub pointer: (f64, f64),
     pub element_at_pointer: Option<usize>,
 
     dom_dirty: bool,
-    prev_params: [f32; PARAMS_COUNT],
+    prev_params: [f64; PARAMS_COUNT],
     prev_gui_shared: GUIShared,
 }
 
 impl View {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new(width: f64, height: f64) -> Self {
         let html = include_str!("layout/index.html").replace("%STYLESHEET%", include_str!("layout/output.css"));
 
         let mut doc = HtmlDocument::from_html(&html, DocumentConfig::default());
@@ -41,12 +41,12 @@ impl View {
             element_at_pointer: None,
             dom_dirty: false,
             // NaN guarantees first-frame DOM update via != comparison
-            prev_params: [f32::NAN; PARAMS_COUNT],
+            prev_params: [f64::NAN; PARAMS_COUNT],
             prev_gui_shared: GUIShared::default(),
         }
     }
 
-    pub fn set_dimensions(&mut self, width: f32, height: f32) {
+    pub fn set_dimensions(&mut self, width: f64, height: f64) {
         self.doc.set_viewport(Viewport {
             window_size: (width as u32, height as u32),
             ..Viewport::default()
@@ -54,11 +54,11 @@ impl View {
         self.dom_dirty = true;
     }
 
-    pub fn set_pointer(&mut self, x: f32, y: f32, _is_down: bool) {
+    pub fn set_pointer(&mut self, x: f64, y: f64, _is_down: bool) {
         self.pointer = (x, y);
     }
 
-    pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f32; PARAMS_COUNT]) {
+    pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
         // 1. Mutate DOM text nodes only when values changed
         let prev_params = self.prev_params;
         let prev_gui_shared = self.prev_gui_shared;
@@ -99,7 +99,7 @@ impl View {
         self.element_at_pointer
     }
 
-    pub fn draw_widget(&mut self, scene: &mut Scene, widget: &dyn Widget, value: f32) {
+    pub fn draw_widget(&mut self, scene: &mut Scene, widget: &dyn Widget, value: f64) {
         let Some(node_id) = self.doc.get_element_by_id(widget.element_id()) else {
             return;
         };

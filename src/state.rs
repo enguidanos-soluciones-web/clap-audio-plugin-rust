@@ -1,6 +1,7 @@
 use crate::channel::{Receiver, Sender};
-use crate::clap::*;
 use crate::dsp::dc_filter::DcFilter;
+use crate::dsp::lowpass_filter::LowPassFilter;
+use crate::{clap::*, dsp};
 use crate::{dsp::nam, parameters::any::PARAMS_COUNT};
 use arc_swap::ArcSwap;
 use std::fmt::Debug;
@@ -10,18 +11,18 @@ use std::sync::Arc;
 pub enum ParamEvent {
     Ack,
     Nack { id: usize },
-    Automation { id: usize, value: f32 },
+    Automation { id: usize, value: f64 },
 }
 
 #[derive(Debug)]
 pub struct ParamChange {
     pub id: usize,
-    pub value: f32,
+    pub value: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct ParamSnapshot {
-    pub values: [f32; PARAMS_COUNT],
+    pub values: [f64; PARAMS_COUNT],
 }
 
 pub struct AudioThreadState {
@@ -35,6 +36,7 @@ pub struct AudioThreadState {
     pub output_buf: Vec<f64>,
 
     pub dc_filter: DcFilter,
+    pub lowpass_filter: LowPassFilter,
 
     pub daw_events: Sender<ParamEvent>,
     pub param_changes: Receiver<ParamChange>,
@@ -44,6 +46,17 @@ pub struct AudioThreadState {
 }
 
 impl AudioThreadState {
+    pub fn reset(&mut self) {
+        if let Some(nam_model) = self.nam_model.as_mut() {
+            dsp::nam::ffi::reset(nam_model.pin_mut(), self.sample_rate, self.input_buf.len() as i32);
+        }
+
+        self.input_buf.fill(0.0);
+        self.output_buf.fill(0.0);
+        self.dc_filter.reset();
+        self.lowpass_filter.reset();
+    }
+
     pub fn assert_audio_thread(&self) {
         debug_assert_eq!(
             std::thread::current().id(),

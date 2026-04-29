@@ -5,7 +5,7 @@ pub trait Widget {
 
     fn param_id(&self) -> usize;
 
-    fn normalize(&self, raw: f32) -> f64;
+    fn normalize(&self, raw: f64) -> f64;
 
     /// Paint the widget into `scene`.
     ///

@@ -1,6 +1,7 @@
 pub mod any;
 pub mod input_gain;
 pub mod output_gain;
+pub mod tone;
 
 use std::marker::PhantomData;
 
@@ -9,7 +10,7 @@ pub const PARAMETER_GESTURE_CLICK: u8 = 1 << 1;
 
 pub struct ProposedParamChange {
     pub index: usize,
-    pub value: f32,
+    pub value: f64,
 }
 
 #[derive(Clone, Copy)]

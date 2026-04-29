@@ -12,45 +12,51 @@ use vello::{
 };
 
 #[derive(Clone, Copy)]
-pub struct InputGain;
+pub struct Tone;
 
-impl Parameter<InputGain, Range> {
-    pub const ID: usize = 0;
+impl Parameter<Tone, Range> {
+    pub const ID: usize = 2;
 
     pub fn new() -> Self {
         Self {
             id: Self::ID,
-            name: "Input Gain",
+            name: "Tone",
             gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
             behave: Range {
-                min: -20.0,
-                max: 20.0,
-                def: 0.0,
+                min: 0.,
+                max: 1.,
+                def: 0.5,
             },
             _marker_type: std::marker::PhantomData,
             _marker_behaviour: std::marker::PhantomData,
         }
     }
 
-    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, InputGain, Range>> {
+    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, Tone, Range>> {
         if self.gestures & PARAMETER_GESTURE_DRAG != 0 {
-            Some(ParameterDraggable::<InputGain, Range>::new(self))
+            Some(ParameterDraggable::<Tone, Range>::new(self))
         } else {
             None
         }
     }
 
-    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, InputGain, Range>> {
+    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, Tone, Range>> {
         if self.gestures & PARAMETER_GESTURE_CLICK != 0 {
-            Some(ParameterClickable::<InputGain, Range>::new(self))
+            Some(ParameterClickable::<Tone, Range>::new(self))
         } else {
             None
         }
+    }
+
+    pub fn to_hertz(value: f64) -> f64 {
+        const MIN_HZ: f64 = 2000.0;
+        const MAX_HZ: f64 = 40000.0;
+        MIN_HZ * (MAX_HZ / MIN_HZ).powf(value)
     }
 }
 
-impl<'a> ParameterDraggable<'a, InputGain, Range> {
-    pub fn new(inner: &'a Parameter<InputGain, Range>) -> Self {
+impl<'a> ParameterDraggable<'a, Tone, Range> {
+    pub fn new(inner: &'a Parameter<Tone, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -79,8 +85,8 @@ impl<'a> ParameterDraggable<'a, InputGain, Range> {
     }
 }
 
-impl<'a> ParameterClickable<'a, InputGain, Range> {
-    pub fn new(inner: &'a Parameter<InputGain, Range>) -> Self {
+impl<'a> ParameterClickable<'a, Tone, Range> {
+    pub fn new(inner: &'a Parameter<Tone, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -96,9 +102,9 @@ impl<'a> ParameterClickable<'a, InputGain, Range> {
     }
 }
 
-impl Widget for Parameter<InputGain, Range> {
+impl Widget for Parameter<Tone, Range> {
     fn element_id(&self) -> &'static str {
-        "input-gain"
+        "tone"
     }
 
     fn param_id(&self) -> usize {

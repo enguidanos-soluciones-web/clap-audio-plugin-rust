@@ -9,6 +9,7 @@ impl ActiveClick {
         let is_clickable = match &param {
             AnyParameter::InputGain { inner } => inner.as_clickable().is_some(),
             AnyParameter::OutputGain { inner } => inner.as_clickable().is_some(),
+            AnyParameter::Tone { inner } => inner.as_clickable().is_some(),
         };
 
         if !is_clickable {
@@ -22,6 +23,7 @@ impl ActiveClick {
         match &self.0 {
             AnyParameter::InputGain { inner } => inner.as_clickable()?.on_double_click(),
             AnyParameter::OutputGain { inner } => inner.as_clickable()?.on_double_click(),
+            AnyParameter::Tone { inner } => inner.as_clickable()?.on_double_click(),
         }
     }
 }

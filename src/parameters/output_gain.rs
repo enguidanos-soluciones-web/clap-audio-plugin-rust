@@ -65,16 +65,16 @@ impl<'a> ParameterDraggable<'a, OutputGain, Range> {
     ///
     /// `SENSITIVITY` sets drag resolution: that many pixels of travel covers the full
     /// normalized range [0.0, 1.0], i.e. the entire [-20 dB, +20 dB] span.
-    pub fn on_drag(&self, start_pos: (f32, f32), start_value: f32, current_pos: (f32, f32)) -> Option<ProposedParamChange> {
-        const SENSITIVITY: f32 = 200.0;
+    pub fn on_drag(&self, start_pos: (f64, f64), start_value: f64, current_pos: (f64, f64)) -> Option<ProposedParamChange> {
+        const SENSITIVITY: f64 = 200.0;
 
         let delta = (start_pos.1 - current_pos.1) / SENSITIVITY;
-        let normalized = (start_value + delta).clamp(0.0, 1.0) as f64;
+        let normalized = (start_value + delta).clamp(0.0, 1.0);
         let value = self.inner.behave.min + normalized * (self.inner.behave.max - self.inner.behave.min);
 
         Some(ProposedParamChange {
             index: self.inner.id,
-            value: value as f32,
+            value: value,
         })
     }
 }
@@ -91,7 +91,7 @@ impl<'a> ParameterClickable<'a, OutputGain, Range> {
     pub fn on_double_click(&self) -> Option<ProposedParamChange> {
         Some(ProposedParamChange {
             index: self.inner.id,
-            value: self.inner.behave.def as f32,
+            value: self.inner.behave.def,
         })
     }
 }
@@ -105,8 +105,8 @@ impl Widget for Parameter<OutputGain, Range> {
         Self::ID
     }
 
-    fn normalize(&self, raw: f32) -> f64 {
-        Self::new().normalize(raw as f64)
+    fn normalize(&self, raw: f64) -> f64 {
+        Self::new().normalize(raw)
     }
 
     fn draw(&self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64, normalized: f64) {

@@ -19,15 +19,19 @@ pub extern "C" fn save(plugin: *const clap_plugin_t, stream: *const clap_ostream
     };
 
     let snapshot = main.param_snapshot.load();
-    let bytes_written = unsafe {
-        write(
-            stream,
-            snapshot.values.as_ptr() as *const c_void,
-            (std::mem::size_of::<f32>() * PARAMS_COUNT) as u64,
-        ) as usize
-    };
 
-    bytes_written == std::mem::size_of::<f32>() * PARAMS_COUNT
+    let total = std::mem::size_of::<f64>() * PARAMS_COUNT;
+    let buf = unsafe { std::slice::from_raw_parts(snapshot.values.as_ptr() as *const u8, total) };
+    let mut offset = 0;
+    while offset < total {
+        let n = unsafe { write(stream, buf.as_ptr().add(offset) as *const c_void, (total - offset) as u64) };
+        if n <= 0 {
+            break;
+        }
+        offset += n as usize;
+    }
+
+    offset == total
 }
 
 // [main-thread]
@@ -44,15 +48,18 @@ pub extern "C" fn load(plugin: *const clap_plugin_t, stream: *const clap_istream
 
     let mut new_snapshot = *main_thread.param_snapshot.load_full();
 
-    let bytes_read = unsafe {
-        read(
-            stream,
-            new_snapshot.values.as_mut_ptr() as *mut c_void,
-            (std::mem::size_of::<f32>() * PARAMS_COUNT) as u64,
-        ) as usize
-    };
+    let total = std::mem::size_of::<f64>() * PARAMS_COUNT;
+    let buf = unsafe { std::slice::from_raw_parts_mut(new_snapshot.values.as_mut_ptr() as *mut u8, total) };
+    let mut offset = 0;
+    while offset < total {
+        let n = unsafe { read(stream, buf.as_mut_ptr().add(offset) as *mut c_void, (total - offset) as u64) };
+        if n <= 0 {
+            break;
+        }
+        offset += n as usize;
+    }
 
-    let success = bytes_read == std::mem::size_of::<f32>() * PARAMS_COUNT;
+    let success = offset == total;
 
     if success {
         // Pub new snapshot with loaded values

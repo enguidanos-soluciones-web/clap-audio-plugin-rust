@@ -1,7 +1,7 @@
 use crate::{
     dsp::nam,
-    helper::db_to_linear,
-    parameters::{Parameter, Range, input_gain::InputGain, output_gain::OutputGain},
+    helper::{DecibelConversion, db_to_linear},
+    parameters::{Parameter, Range, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::AudioThreadState,
 };
 
@@ -10,8 +10,8 @@ pub fn render_audio_f64(audio_thread: &mut AudioThreadState, input: *const f64, 
 
     let snapshot = audio_thread.param_snapshot.load();
 
-    let input_gain = db_to_linear(snapshot.values[Parameter::<InputGain, Range>::ID] as f64);
-    let output_gain = db_to_linear(snapshot.values[Parameter::<OutputGain, Range>::ID] as f64);
+    let input_gain = db_to_linear(snapshot.values[Parameter::<InputGain, Range>::ID], DecibelConversion::Amplitude);
+    let output_gain = db_to_linear(snapshot.values[Parameter::<OutputGain, Range>::ID], DecibelConversion::Amplitude);
 
     let input_slice = unsafe { std::slice::from_raw_parts(input, nframes) };
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output, nframes) };
@@ -29,10 +29,16 @@ pub fn render_audio_f64(audio_thread: &mut AudioThreadState, input: *const f64, 
             &mut audio_thread.output_buf[..nframes],
         );
 
+        let tone = snapshot.values[Parameter::<Tone, Range>::ID];
+        let cutoff = Parameter::<Tone, Range>::to_hertz(tone);
+        audio_thread.lowpass_filter.set_cutoff(cutoff, audio_thread.sample_rate);
+
         // 3. DC Filter, Loudness Correction and output gain
         for i in 0..nframes {
-            let dc_filtered_sample = audio_thread.dc_filter.process_sample(audio_thread.output_buf[i]);
-            output_slice[i] = dc_filtered_sample * audio_thread.nam_loudness_correction * output_gain;
+            let dc_filter = audio_thread.dc_filter.process_sample(audio_thread.output_buf[i]);
+            let lowpass_filter = audio_thread.lowpass_filter.process_sample(dc_filter);
+            let sample = lowpass_filter * audio_thread.nam_loudness_correction * output_gain;
+            output_slice[i] = sample;
         }
     } else {
         output_slice.copy_from_slice(input_slice);
@@ -44,8 +50,8 @@ pub fn render_audio_f32(audio_thread: &mut AudioThreadState, input: *const f32, 
 
     let snapshot = audio_thread.param_snapshot.load();
 
-    let input_gain = db_to_linear(snapshot.values[Parameter::<InputGain, Range>::ID] as f64);
-    let output_gain = db_to_linear(snapshot.values[Parameter::<OutputGain, Range>::ID] as f64);
+    let input_gain = db_to_linear(snapshot.values[Parameter::<InputGain, Range>::ID], DecibelConversion::Amplitude);
+    let output_gain = db_to_linear(snapshot.values[Parameter::<OutputGain, Range>::ID], DecibelConversion::Amplitude);
 
     let input_slice = unsafe { std::slice::from_raw_parts(input, nframes) };
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output, nframes) };
@@ -63,10 +69,16 @@ pub fn render_audio_f32(audio_thread: &mut AudioThreadState, input: *const f32, 
             &mut audio_thread.output_buf[..nframes],
         );
 
+        let tone = snapshot.values[Parameter::<Tone, Range>::ID];
+        let tone_cutoff = Parameter::<Tone, Range>::to_hertz(tone);
+        audio_thread.lowpass_filter.set_cutoff(tone_cutoff, audio_thread.sample_rate);
+
         // 3. DC Filter, Loudness Correction and output gain
         for i in 0..nframes {
-            let dc_filtered_sample = audio_thread.dc_filter.process_sample(audio_thread.output_buf[i]);
-            output_slice[i] = (dc_filtered_sample * audio_thread.nam_loudness_correction * output_gain) as f32;
+            let dc_filter = audio_thread.dc_filter.process_sample(audio_thread.output_buf[i]);
+            let lowpass_filter = audio_thread.lowpass_filter.process_sample(dc_filter);
+            let sample = lowpass_filter * audio_thread.nam_loudness_correction * output_gain;
+            output_slice[i] = sample as f32;
         }
     } else {
         output_slice.copy_from_slice(input_slice);

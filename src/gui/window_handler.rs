@@ -10,7 +10,6 @@ use baseview::{Event, EventStatus, MouseButton, MouseEvent, Window, WindowEvent,
 use std::{sync::Arc, time::Instant};
 use vello::{Scene, kurbo::Affine};
 
-
 pub struct WindowHandler {
     gpu: Option<Gpu>,
     width: u32,
@@ -49,7 +48,7 @@ impl WindowHandler {
 
         Self {
             gpu: Gpu::new(window, width, height),
-            view: View::new(width as f32, height as f32),
+            view: View::new(width as f64, height as f64),
             width,
             height,
             scale: 1.0,
@@ -88,7 +87,7 @@ impl BaseWindowHandlers for WindowHandler {
         let gui_shared = self.gui_shared.load();
 
         self.view
-            .set_pointer(self.cursor_pos.x as f32, self.cursor_pos.y as f32, self.cursor_drag.is_some());
+            .set_pointer(self.cursor_pos.x, self.cursor_pos.y, self.cursor_drag.is_some());
 
         self.content_scene.reset();
         self.view.render(&mut self.content_scene, &gui_shared, &snapshot.values);
@@ -103,8 +102,8 @@ impl BaseWindowHandlers for WindowHandler {
             Event::Mouse(MouseEvent::ButtonPressed {
                 button: MouseButton::Left, ..
             }) => {
-                let x = self.cursor_pos.x as f32;
-                let y = self.cursor_pos.y as f32;
+                let x = self.cursor_pos.x;
+                let y = self.cursor_pos.y;
 
                 let Some(index) = self.view.element_at_pointer() else {
                     return EventStatus::Captured;
@@ -146,7 +145,7 @@ impl BaseWindowHandlers for WindowHandler {
                 self.cursor_pos = position;
 
                 if let Some(cursor_drag) = &self.cursor_drag {
-                    if let Some(change) = cursor_drag.on_drag(position.x as f32, position.y as f32) {
+                    if let Some(change) = cursor_drag.on_drag(position.x, position.y) {
                         let _ = self.gui_changes.push(ParamChange {
                             id: change.index,
                             value: change.value,
@@ -162,7 +161,7 @@ impl BaseWindowHandlers for WindowHandler {
                 self.height = info.physical_size().height;
                 self.scale = info.scale();
                 self.view
-                    .set_dimensions(self.width as f32 / self.scale as f32, self.height as f32 / self.scale as f32);
+                    .set_dimensions(self.width as f64 / self.scale, self.height as f64 / self.scale);
                 self.gpu = Gpu::new(window, self.width, self.height);
 
                 EventStatus::Ignored

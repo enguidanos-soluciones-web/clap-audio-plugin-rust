@@ -1,6 +1,6 @@
 use crate::{
     gui::view::View,
-    parameters::{Parameter, Range, any::PARAMS_COUNT, input_gain::InputGain, output_gain::OutputGain},
+    parameters::{Parameter, Range, any::PARAMS_COUNT, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::GUIShared,
 };
 use vello::Scene;
@@ -9,9 +9,9 @@ use vello::Scene;
 pub fn update_dom(
     view: &mut View,
     state: &GUIShared,
-    parameters_values: &[f32; PARAMS_COUNT],
+    parameters_values: &[f64; PARAMS_COUNT],
     prev_state: &GUIShared,
-    prev_params: &[f32; PARAMS_COUNT],
+    prev_params: &[f64; PARAMS_COUNT],
 ) -> bool {
     let mut dirty = false;
 
@@ -49,11 +49,22 @@ pub fn update_dom(
         }
     }
 
+    let tone_id = Parameter::<Tone, Range>::ID;
+    if parameters_values[tone_id] != prev_params[tone_id] {
+        if let Some(span) = view.doc.get_element_by_id("tone-val") {
+            let mut mutator = view.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.1}", parameters_values[tone_id] * 5.));
+            mutator.append_children(span, &[text]);
+            dirty = true;
+        }
+    }
+
     dirty
 }
 
 /// Draws widget shapes into the Vello scene (pure vector, no DOM involved).
-pub fn draw_widgets(view: &mut View, scene: &mut Scene, parameters_values: &[f32; PARAMS_COUNT]) {
+pub fn draw_widgets(view: &mut View, scene: &mut Scene, parameters_values: &[f64; PARAMS_COUNT]) {
     view.draw_widget(
         scene,
         &Parameter::<InputGain, Range>::new(),
@@ -64,5 +75,11 @@ pub fn draw_widgets(view: &mut View, scene: &mut Scene, parameters_values: &[f32
         scene,
         &Parameter::<OutputGain, Range>::new(),
         parameters_values[Parameter::<OutputGain, Range>::ID],
+    );
+
+    view.draw_widget(
+        scene,
+        &Parameter::<Tone, Range>::new(),
+        parameters_values[Parameter::<Tone, Range>::ID],
     );
 }

@@ -44,9 +44,9 @@ use crate::{
     channel::channel,
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
-    dsp::{self, dc_filter::DcFilter},
+    dsp::{self, dc_filter::DcFilter, lowpass_filter::LowPassFilter},
     extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
-    helper::db_to_linear,
+    helper::{DecibelConversion, db_to_linear},
     parameters::any::PARAMS_COUNT,
     plugin,
     processors::{
@@ -95,7 +95,7 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
     let (_, gui_changes_rx) = channel::<ParamChange>(64);
 
     let param_snapshot = Arc::new(ArcSwap::new(Arc::new(ParamSnapshot {
-        values: [0.0f32; PARAMS_COUNT],
+        values: [0.0; PARAMS_COUNT],
     })));
 
     plugin_ref.main_thread = Some(MainThreadState {
@@ -111,13 +111,13 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
     });
 
     let main_thread = plugin_ref.main_thread.as_mut().unwrap();
-    let mut default_values = [0.0f32; PARAMS_COUNT];
+    let mut default_values = [0.0; PARAMS_COUNT];
     for n in 0..PARAMS_COUNT {
         let mut information = unsafe { std::mem::zeroed::<clap_param_info_t>() };
         if let Some(get_info) = PARAMETERS_EXT.get_info {
             // SAFETY: MAIN-THREAD must have FIRST THREAD_ID as SOME. OTHERWISE get_info WILL PANIC.
             if unsafe { get_info(plugin, n as u32, &mut information) } {
-                default_values[n] = information.default_value as f32;
+                default_values[n] = information.default_value;
             }
         }
     }
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let mut nam_loudness_correction = 1.0;
     if dsp::nam::ffi::has_loudness(&nam_model) {
         let nam_loudness_model = dsp::nam::ffi::get_loudness(&nam_model);
-        nam_loudness_correction = db_to_linear(NAM_TARGET_LOUDNESS_DBFS - nam_loudness_model)
+        nam_loudness_correction = db_to_linear(NAM_TARGET_LOUDNESS_DBFS - nam_loudness_model, DecibelConversion::Amplitude)
     }
 
     let mut new_gui_shared = *main_thread.gui_shared.load_full();
@@ -163,8 +163,9 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
         nam_model: Some(nam_model),
         nam_loudness_correction,
         dc_filter: DcFilter::new(20.0, sample_rate),
-        input_buf: vec![0.0f64; max_frames_count as usize],
-        output_buf: vec![0.0f64; max_frames_count as usize],
+        lowpass_filter: LowPassFilter::new(16.0, sample_rate),
+        input_buf: vec![0.0; max_frames_count as usize],
+        output_buf: vec![0.0; max_frames_count as usize],
         param_snapshot: Arc::clone(&main_thread.param_snapshot),
         param_changes: main_thread.param_changes.new_receiver(),
         daw_events: main_thread.daw_events.new_sender(),
@@ -179,9 +180,6 @@ pub unsafe extern "C" fn deactivate(plugin: *const clap_plugin) {
     let plugin_ref = unsafe { ((*plugin).plugin_data as *mut Plugin).as_mut_unchecked() };
 
     if plugin_ref.audio_thread.is_none() {
-        #[cfg(debug_assertions)]
-        println!("Audio Thread not yet active");
-
         return;
     }
 
@@ -237,14 +235,7 @@ pub unsafe extern "C" fn reset(plugin: *const clap_plugin) {
 
     let audio_thread = plugin_ref.audio_thread.as_mut().expect("Audio Thread not initialized");
     audio_thread.assert_audio_thread();
-
-    if let Some(nam_model) = audio_thread.nam_model.as_mut() {
-        dsp::nam::ffi::reset(nam_model.pin_mut(), audio_thread.sample_rate, audio_thread.input_buf.len() as i32);
-    }
-
-    audio_thread.input_buf.fill(0.0);
-    audio_thread.output_buf.fill(0.0);
-    audio_thread.dc_filter.reset();
+    audio_thread.reset();
 }
 
 // [thread-safe]
@@ -348,15 +339,17 @@ pub unsafe extern "C" fn process(plugin: *const clap_plugin, process: *const cla
 
     let nframes = process_ref.frames_count as usize;
 
-    if !audio_inputs.data32.is_null() && !audio_outputs.data32.is_null() {
-        let input = unsafe { *audio_inputs.data32.offset(0) };
-        let output = unsafe { *audio_outputs.data32.offset(0) };
-        render_audio_f32(audio_thread, input, output, nframes);
-    }
     if !audio_inputs.data64.is_null() && !audio_outputs.data64.is_null() {
         let input = unsafe { *audio_inputs.data64.offset(0) };
         let output = unsafe { *audio_outputs.data64.offset(0) };
         render_audio_f64(audio_thread, input, output, nframes);
+        return CLAP_PROCESS_CONTINUE as clap_process_status;
+    }
+    if !audio_inputs.data32.is_null() && !audio_outputs.data32.is_null() {
+        let input = unsafe { *audio_inputs.data32.offset(0) };
+        let output = unsafe { *audio_outputs.data32.offset(0) };
+        render_audio_f32(audio_thread, input, output, nframes);
+        return CLAP_PROCESS_CONTINUE as clap_process_status;
     }
 
     CLAP_PROCESS_CONTINUE as clap_process_status

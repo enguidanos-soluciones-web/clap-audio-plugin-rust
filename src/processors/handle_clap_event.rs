@@ -14,7 +14,7 @@ pub fn handle_clap_event(audio_thread: &mut AudioThreadState, event: *const clap
     if event_ref.type_ as u32 == CLAP_EVENT_PARAM_VALUE {
         let value_event = unsafe { (event as *const clap_event_param_value_t).as_ref_unchecked() };
         let id = value_event.param_id as usize;
-        let value = value_event.value as f32;
+        let value = value_event.value;
 
         let _ = audio_thread.daw_events.push(ParamEvent::Automation { id, value });
 
