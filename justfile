@@ -43,7 +43,7 @@ _plist:
     <plist version="1.0">
     <dict>
         <key>CFBundleExecutable</key>
-        <string>Neural Amp Modeler</string>
+        <string>neural_amp_modeler</string>
         <key>CFBundleIdentifier</key>
         <string>com.enguidanosweb.NeuralAmpModeler</string>
         <key>CFBundleVersion</key>

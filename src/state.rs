@@ -29,6 +29,7 @@ pub struct AudioThreadState {
     pub sample_rate: f64,
 
     pub nam_model: Option<cxx::UniquePtr<nam::ffi::NamDsp>>,
+    pub nam_loudness_correction: f64,
 
     pub input_buf: Vec<f64>,
     pub output_buf: Vec<f64>,

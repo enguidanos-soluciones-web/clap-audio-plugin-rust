@@ -46,9 +46,14 @@ use crate::{
     descriptor::PLUGIN_DESCRIPTOR,
     dsp::{self, dc_filter::DcFilter},
     extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
+    helper::db_to_linear,
     parameters::any::PARAMS_COUNT,
     plugin,
-    processors::{handle_clap_event::handle_clap_event, render_audio::render_audio, sync_main_to_audio::sync_main_to_audio},
+    processors::{
+        handle_clap_event::handle_clap_event,
+        render_audio::{render_audio_f32, render_audio_f64},
+        sync_main_to_audio::sync_main_to_audio,
+    },
     state::{AudioThreadState, MainThreadState, ParamChange, ParamEvent, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
@@ -138,8 +143,15 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     let main_thread = plugin_ref.main_thread.as_mut().expect("main thread not initialized");
     main_thread.assert_main_thread();
 
-    let mut model = dsp::nam::ffi::dsp_load(MODEL_JSON);
-    dsp::nam::ffi::dsp_reset(model.pin_mut(), sample_rate, max_frames_count as i32);
+    let mut nam_model = dsp::nam::ffi::load(MODEL_JSON);
+    dsp::nam::ffi::reset_and_prewarm(nam_model.pin_mut(), sample_rate, max_frames_count as i32);
+
+    const NAM_TARGET_LOUDNESS_DBFS: f64 = -12.0;
+    let mut nam_loudness_correction = 1.0;
+    if dsp::nam::ffi::has_loudness(&nam_model) {
+        let nam_loudness_model = dsp::nam::ffi::get_loudness(&nam_model);
+        nam_loudness_correction = db_to_linear(NAM_TARGET_LOUDNESS_DBFS - nam_loudness_model)
+    }
 
     let mut new_gui_shared = *main_thread.gui_shared.load_full();
     new_gui_shared.nam_model_rate = Some(dsp::nam::ffi::get_sample_rate_from_nam_file(MODEL_JSON) as u64);
@@ -148,7 +160,8 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
     plugin_ref.audio_thread = Some(AudioThreadState {
         host: plugin_ref.host,
         sample_rate,
-        nam_model: Some(model),
+        nam_model: Some(nam_model),
+        nam_loudness_correction,
         dc_filter: DcFilter::new(20.0, sample_rate),
         input_buf: vec![0.0f64; max_frames_count as usize],
         output_buf: vec![0.0f64; max_frames_count as usize],
@@ -191,6 +204,8 @@ pub unsafe extern "C" fn deactivate(plugin: *const clap_plugin) {
             }
         }
     }
+
+    plugin_ref.audio_thread.take();
 }
 
 // [audio-thread & active & !processing]
@@ -224,7 +239,7 @@ pub unsafe extern "C" fn reset(plugin: *const clap_plugin) {
     audio_thread.assert_audio_thread();
 
     if let Some(nam_model) = audio_thread.nam_model.as_mut() {
-        dsp::nam::ffi::dsp_reset(nam_model.pin_mut(), audio_thread.sample_rate, audio_thread.input_buf.len() as i32);
+        dsp::nam::ffi::reset(nam_model.pin_mut(), audio_thread.sample_rate, audio_thread.input_buf.len() as i32);
     }
 
     audio_thread.input_buf.fill(0.0);
@@ -317,13 +332,32 @@ pub unsafe extern "C" fn process(plugin: *const clap_plugin, process: *const cla
         }
     }
 
-    debug_assert!(process_ref.audio_inputs_count == 1);
-    debug_assert!(process_ref.audio_outputs_count == 1);
+    // Some hosts (e.g. REAPER on macOS) may call process() before audio buffers
+    // are fully set up, which is technically outside the CLAP spec but happens
+    // in practice. Guard against null pointers to avoid a crash.
+    if process_ref.audio_inputs_count == 0 || process_ref.audio_outputs_count == 0 {
+        return CLAP_PROCESS_CONTINUE as clap_process_status;
+    }
 
-    let audio_input = unsafe { *process_ref.audio_inputs.as_ref_unchecked().data32.offset(0) };
-    let audio_output = unsafe { *process_ref.audio_outputs.as_mut_unchecked().data32.offset(0) };
+    let audio_inputs = unsafe { process_ref.audio_inputs.as_ref() };
+    let audio_outputs = unsafe { process_ref.audio_outputs.as_mut() };
 
-    render_audio(audio_thread, audio_input, audio_output, process_ref.frames_count as usize);
+    let (Some(audio_inputs), Some(audio_outputs)) = (audio_inputs, audio_outputs) else {
+        return CLAP_PROCESS_CONTINUE as clap_process_status;
+    };
+
+    let nframes = process_ref.frames_count as usize;
+
+    if !audio_inputs.data32.is_null() && !audio_outputs.data32.is_null() {
+        let input = unsafe { *audio_inputs.data32.offset(0) };
+        let output = unsafe { *audio_outputs.data32.offset(0) };
+        render_audio_f32(audio_thread, input, output, nframes);
+    }
+    if !audio_inputs.data64.is_null() && !audio_outputs.data64.is_null() {
+        let input = unsafe { *audio_inputs.data64.offset(0) };
+        let output = unsafe { *audio_outputs.data64.offset(0) };
+        render_audio_f64(audio_thread, input, output, nframes);
+    }
 
     CLAP_PROCESS_CONTINUE as clap_process_status
 }

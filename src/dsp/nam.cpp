@@ -34,7 +34,7 @@ static void ensure_registrations() {
     reg.registerParser("SlimmableContainer", nam::container::create_config);
 }
 
-std::unique_ptr<NamDsp> dsp_load(rust::Str json) {
+std::unique_ptr<NamDsp> load(rust::Str json) {
   ensure_registrations();
   auto config = nlohmann::json::parse(std::string(json.data(), json.size()));
   auto wrapper = std::make_unique<NamDsp>();
@@ -42,15 +42,20 @@ std::unique_ptr<NamDsp> dsp_load(rust::Str json) {
   return wrapper;
 }
 
-void dsp_process(NamDsp &dsp, rust::Slice<const double> input,
-                 rust::Slice<double> output) {
+void process(NamDsp &dsp, rust::Slice<const double> input,
+             rust::Slice<double> output) {
   double *in_ptr = const_cast<double *>(input.data());
   double *out_ptr = output.data();
   dsp.inner->process(&in_ptr, &out_ptr, static_cast<int>(input.size()));
 }
 
-void dsp_reset(NamDsp &dsp, double sample_rate, int32_t max_block_size) {
+void reset(NamDsp &dsp, double sample_rate, int32_t max_block_size) {
   dsp.inner->Reset(sample_rate, static_cast<int>(max_block_size));
+}
+
+void reset_and_prewarm(NamDsp &dsp, double sample_rate,
+                       int32_t max_block_size) {
+  dsp.inner->ResetAndPrewarm(sample_rate, static_cast<int>(max_block_size));
 }
 
 double get_sample_rate_from_nam_file(rust::Str json) {
@@ -58,3 +63,6 @@ double get_sample_rate_from_nam_file(rust::Str json) {
   auto sampleRate = nam::get_sample_rate_from_nam_file(config);
   return sampleRate;
 }
+
+bool has_loudness(const NamDsp &dsp) { return dsp.inner->HasLoudness(); }
+double get_loudness(const NamDsp &dsp) { return dsp.inner->GetLoudness(); }
