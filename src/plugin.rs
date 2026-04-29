@@ -44,7 +44,7 @@ use crate::{
     channel::channel,
     clap::*,
     descriptor::PLUGIN_DESCRIPTOR,
-    dsp::{self, dc_filter::DcFilter, lowpass_filter::LowPassFilter},
+    dsp::{self, dc_filter::DcFilter, klon_buffer::KlonBuffer, lowpass_filter::LowPassFilter},
     extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
     helper::{DecibelConversion, db_to_linear},
     parameters::any::PARAMS_COUNT,
@@ -62,7 +62,7 @@ use std::{
     sync::Arc,
 };
 
-const MODEL_JSON: &str = include_str!("../models/amp_drive.nam");
+const MODEL_JSON: &str = include_str!("../models/amp_clean.nam");
 
 pub struct Plugin {
     pub inner: clap_plugin_t,
@@ -163,6 +163,7 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
         nam_model: Some(nam_model),
         nam_loudness_correction,
         dc_filter: DcFilter::new(20.0, sample_rate),
+        klon_buffer: KlonBuffer::new(sample_rate),
         lowpass_filter: LowPassFilter::new(16.0, sample_rate),
         input_buf: vec![0.0; max_frames_count as usize],
         output_buf: vec![0.0; max_frames_count as usize],

@@ -12,45 +12,53 @@ use vello::{
 };
 
 #[derive(Clone, Copy)]
-pub struct OutputGain;
+pub struct Blend;
 
-impl Parameter<OutputGain, Range> {
-    pub const ID: usize = 1;
+impl Parameter<Blend, Range> {
+    pub const ID: usize = 3;
 
     pub fn new() -> Self {
         Self {
             id: Self::ID,
-            name: "Output Gain",
+            name: "Blend",
             gestures: PARAMETER_GESTURE_DRAG | PARAMETER_GESTURE_CLICK,
-            behave: Range {
-                min: -5.0,
-                max: 5.0,
-                def: 0.0,
-            },
+            behave: Range { min: 0., max: 1., def: 1. },
             _marker_type: std::marker::PhantomData,
             _marker_behaviour: std::marker::PhantomData,
         }
     }
 
-    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, OutputGain, Range>> {
+    pub fn as_draggable(&self) -> Option<ParameterDraggable<'_, Blend, Range>> {
         if self.gestures & PARAMETER_GESTURE_DRAG != 0 {
-            Some(ParameterDraggable::<OutputGain, Range>::new(self))
+            Some(ParameterDraggable::<Blend, Range>::new(self))
         } else {
             None
         }
     }
 
-    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, OutputGain, Range>> {
+    pub fn as_clickable(&self) -> Option<ParameterClickable<'_, Blend, Range>> {
         if self.gestures & PARAMETER_GESTURE_CLICK != 0 {
-            Some(ParameterClickable::<OutputGain, Range>::new(self))
+            Some(ParameterClickable::<Blend, Range>::new(self))
         } else {
             None
         }
+    }
+
+    /// Linearly blends `dry` and `wet` signals according to the normalised parameter `value`.
+    ///
+    /// - `dry`   — input signal through the Klon buffer stage (high-pass ~15 Hz + FET compression): no input gain, no NAM, no loudness correction.
+    /// - `wet`   — NAM-processed signal after DC filter, loudness correction and output gain.
+    /// - `value` — normalised blend in `[0.0, 1.0]`: `0.0` = 100 % dry, `1.0` = 100 % wet.
+    ///
+    /// The tone lowpass filter is applied to the blended result (not per-path) so it shapes
+    /// both dry and wet equally with a single stateful filter instance.
+    pub fn mix(dry: f64, wet: f64, value: f64) -> f64 {
+        value * wet + (1.0 - value) * dry
     }
 }
 
-impl<'a> ParameterDraggable<'a, OutputGain, Range> {
-    pub fn new(inner: &'a Parameter<OutputGain, Range>) -> Self {
+impl<'a> ParameterDraggable<'a, Blend, Range> {
+    pub fn new(inner: &'a Parameter<Blend, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -58,13 +66,6 @@ impl<'a> ParameterDraggable<'a, OutputGain, Range> {
         }
     }
 
-    /// Vertical drag: dragging up increases gain, dragging down decreases it.
-    ///
-    /// Y axis grows downward in screen space, so the delta is `start_y - current_y`:
-    /// moving up gives a positive delta (value increases), moving down a negative one.
-    ///
-    /// `SENSITIVITY` sets drag resolution: that many pixels of travel covers the full
-    /// normalized range [0.0, 1.0], i.e. the entire [-20 dB, +20 dB] span.
     pub fn on_drag(&self, start_pos: (f64, f64), start_value: f64, current_pos: (f64, f64)) -> Option<ProposedParamChange> {
         const SENSITIVITY: f64 = 200.0;
 
@@ -74,13 +75,13 @@ impl<'a> ParameterDraggable<'a, OutputGain, Range> {
 
         Some(ProposedParamChange {
             index: self.inner.id,
-            value: value,
+            value,
         })
     }
 }
 
-impl<'a> ParameterClickable<'a, OutputGain, Range> {
-    pub fn new(inner: &'a Parameter<OutputGain, Range>) -> Self {
+impl<'a> ParameterClickable<'a, Blend, Range> {
+    pub fn new(inner: &'a Parameter<Blend, Range>) -> Self {
         Self {
             inner,
             _marker_type: std::marker::PhantomData,
@@ -96,9 +97,9 @@ impl<'a> ParameterClickable<'a, OutputGain, Range> {
     }
 }
 
-impl Widget for Parameter<OutputGain, Range> {
+impl Widget for Parameter<Blend, Range> {
     fn element_id(&self) -> &'static str {
-        "output-gain"
+        "blend"
     }
 
     fn param_id(&self) -> usize {
@@ -119,10 +120,8 @@ impl Widget for Parameter<OutputGain, Range> {
 
         let center = Point::new(cx, cy);
 
-        // background
         scene.fill(Fill::NonZero, Affine::IDENTITY, colors::neutral_600, None, &Circle::new(center, r));
 
-        // tip next
         scene.stroke(
             &Stroke::new(2.0),
             Affine::IDENTITY,
@@ -131,7 +130,6 @@ impl Widget for Parameter<OutputGain, Range> {
             &arc_path(cx, cy, r - 7.0, KNOB_START, KNOB_SWEEP),
         );
 
-        // tip last
         if normalized > 0.001 {
             scene.stroke(
                 &Stroke::new(2.0),
@@ -142,7 +140,6 @@ impl Widget for Parameter<OutputGain, Range> {
             );
         }
 
-        // tip
         let angle = KNOB_START + normalized * KNOB_SWEEP;
         let ix = cx + (r - 12.0) * angle.cos();
         let iy = cy + (r - 12.0) * angle.sin();
@@ -154,7 +151,6 @@ impl Widget for Parameter<OutputGain, Range> {
             &Line::new(center, Point::new(ix, iy)),
         );
 
-        // border
         scene.stroke(
             &Stroke::new(1.0),
             Affine::IDENTITY,

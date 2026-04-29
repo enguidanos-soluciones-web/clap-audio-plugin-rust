@@ -10,6 +10,7 @@ impl ActiveClick {
             AnyParameter::InputGain { inner } => inner.as_clickable().is_some(),
             AnyParameter::OutputGain { inner } => inner.as_clickable().is_some(),
             AnyParameter::Tone { inner } => inner.as_clickable().is_some(),
+            AnyParameter::Blend { inner } => inner.as_clickable().is_some(),
         };
 
         if !is_clickable {
@@ -24,6 +25,7 @@ impl ActiveClick {
             AnyParameter::InputGain { inner } => inner.as_clickable()?.on_double_click(),
             AnyParameter::OutputGain { inner } => inner.as_clickable()?.on_double_click(),
             AnyParameter::Tone { inner } => inner.as_clickable()?.on_double_click(),
+            AnyParameter::Blend { inner } => inner.as_clickable()?.on_double_click(),
         }
     }
 }

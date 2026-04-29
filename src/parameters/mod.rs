@@ -1,4 +1,5 @@
 pub mod any;
+pub mod blend;
 pub mod input_gain;
 pub mod output_gain;
 pub mod tone;

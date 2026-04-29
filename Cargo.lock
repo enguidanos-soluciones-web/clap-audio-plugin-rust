@@ -1783,6 +1783,8 @@ dependencies = [
  "objc",
  "pollster",
  "raw-window-handle 0.5.2",
+ "strum",
+ "strum_macros",
  "vello",
  "wgpu",
 ]

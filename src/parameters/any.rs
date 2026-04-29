@@ -1,12 +1,13 @@
 use super::{Parameter, Range};
-use crate::parameters::{input_gain::InputGain, output_gain::OutputGain, tone::Tone};
+use crate::parameters::{blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone};
 
-pub const PARAMS_COUNT: usize = 3;
+pub const PARAMS_COUNT: usize = 4;
 
 pub enum AnyParameter {
     InputGain { inner: Parameter<InputGain, Range> },
     OutputGain { inner: Parameter<OutputGain, Range> },
     Tone { inner: Parameter<Tone, Range> },
+    Blend { inner: Parameter<Blend, Range> },
 }
 
 impl TryFrom<usize> for AnyParameter {
@@ -22,6 +23,9 @@ impl TryFrom<usize> for AnyParameter {
             }),
             Parameter::<Tone, Range>::ID => Ok(AnyParameter::Tone {
                 inner: Parameter::<Tone, Range>::new(),
+            }),
+            Parameter::<Blend, Range>::ID => Ok(AnyParameter::Blend {
+                inner: Parameter::<Blend, Range>::new(),
             }),
             _ => Err(()),
         }

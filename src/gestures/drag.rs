@@ -14,12 +14,14 @@ impl ActiveDrag {
             AnyParameter::InputGain { inner } => inner.normalize(raw),
             AnyParameter::OutputGain { inner } => inner.normalize(raw),
             AnyParameter::Tone { inner } => inner.normalize(raw),
+            AnyParameter::Blend { inner } => inner.normalize(raw),
         };
 
         let is_draggable = match &param {
             AnyParameter::InputGain { inner } => inner.as_draggable().is_some(),
             AnyParameter::OutputGain { inner } => inner.as_draggable().is_some(),
             AnyParameter::Tone { inner } => inner.as_draggable().is_some(),
+            AnyParameter::Blend { inner } => inner.as_draggable().is_some(),
         };
 
         if !is_draggable {
@@ -38,6 +40,7 @@ impl ActiveDrag {
             AnyParameter::InputGain { inner } => inner.as_draggable()?.on_drag(self.start_pos, self.start_value, (x, y)),
             AnyParameter::OutputGain { inner } => inner.as_draggable()?.on_drag(self.start_pos, self.start_value, (x, y)),
             AnyParameter::Tone { inner } => inner.as_draggable()?.on_drag(self.start_pos, self.start_value, (x, y)),
+            AnyParameter::Blend { inner } => inner.as_draggable()?.on_drag(self.start_pos, self.start_value, (x, y)),
         }
     }
 }

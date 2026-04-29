@@ -1,6 +1,6 @@
 use crate::{
     gui::view::View,
-    parameters::{Parameter, Range, any::PARAMS_COUNT, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
+    parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::GUIShared,
 };
 use vello::Scene;
@@ -60,6 +60,17 @@ pub fn update_dom(
         }
     }
 
+    let blend_id = Parameter::<Blend, Range>::ID;
+    if parameters_values[blend_id] != prev_params[blend_id] {
+        if let Some(span) = view.doc.get_element_by_id("blend-val") {
+            let mut mutator = view.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.0}%", parameters_values[blend_id] * 100.));
+            mutator.append_children(span, &[text]);
+            dirty = true;
+        }
+    }
+
     dirty
 }
 
@@ -81,5 +92,11 @@ pub fn draw_widgets(view: &mut View, scene: &mut Scene, parameters_values: &[f64
         scene,
         &Parameter::<Tone, Range>::new(),
         parameters_values[Parameter::<Tone, Range>::ID],
+    );
+
+    view.draw_widget(
+        scene,
+        &Parameter::<Blend, Range>::new(),
+        parameters_values[Parameter::<Blend, Range>::ID],
     );
 }
