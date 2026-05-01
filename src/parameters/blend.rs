@@ -103,10 +103,6 @@ impl Widget for Parameter<Blend, Range> {
         "blend"
     }
 
-    fn param_id(&self) -> usize {
-        Self::ID
-    }
-
     fn draw(
         &self,
         scene: &mut Scene,

@@ -5,8 +5,6 @@ use crate::gui::text::TextRenderer;
 pub trait Widget {
     fn dom_id(&self) -> &'static str;
 
-    fn param_id(&self) -> usize;
-
     fn draw(
         &self,
         scene: &mut Scene,

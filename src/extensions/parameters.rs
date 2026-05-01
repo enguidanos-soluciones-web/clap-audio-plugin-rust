@@ -67,9 +67,6 @@ pub extern "C" fn get_info(plugin: *const clap_plugin_t, index: u32, information
             new_information.default_value = inner.behave.def;
             copy_cstr(&mut new_information.name, inner.name.as_bytes());
         }
-        AnyParameter::LoadModel { inner } => {
-            copy_cstr(&mut new_information.name, inner.name.as_bytes());
-        }
     }
 
     unsafe { std::ptr::write(information, new_information) };

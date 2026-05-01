@@ -1,32 +1,30 @@
 use anyrender_vello::VelloScenePainter;
 use blitz_dom::DocumentConfig;
-
 use blitz_html::HtmlDocument;
 use blitz_paint::paint_scene;
 use blitz_traits::shell::Viewport;
 use vello::Scene;
 
 use crate::{
-    gui::{text::TextRenderer, widget::Widget},
-    parameters::{
-        Action, Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain,
-        load_model::LoadModel, output_gain::OutputGain, tone::Tone,
-    },
+    actions::{Action, load_model::LoadModel as LoadModelAction},
+    gui::{HitTarget, text::TextRenderer, widget::Widget},
+    parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::GUIShared,
 };
 
-const WIDGETS: &[(&str, usize)] = &[
-    ("load-model", Parameter::<LoadModel, Action>::ID),
+const PARAM_WIDGETS: &[(&str, usize)] = &[
     ("input-gain", Parameter::<InputGain, Range>::ID),
     ("output-gain", Parameter::<OutputGain, Range>::ID),
     ("tone", Parameter::<Tone, Range>::ID),
     ("blend", Parameter::<Blend, Range>::ID),
 ];
 
+const ACTION_WIDGETS: &[(&str, usize)] = &[("load-model", LoadModelAction::ID)];
+
 pub struct View {
     pub doc: HtmlDocument,
     pub pointer: (f64, f64),
-    pub element_at_pointer: Option<usize>,
+    pub element_at_pointer: Option<HitTarget>,
     pub text: TextRenderer,
 }
 
@@ -68,13 +66,17 @@ impl View {
             return;
         };
 
-        // Walk up the DOM from the hit node to find a widget element.
-        // hit() returns the innermost node (may be a text node inside the widget div).
         let mut node_id = Some(hit.node_id);
         while let Some(id) = node_id {
-            for &(dom_id, param_id) in WIDGETS {
+            for &(dom_id, param_id) in PARAM_WIDGETS {
                 if self.doc.get_element_by_id(dom_id) == Some(id) {
-                    self.element_at_pointer = Some(param_id);
+                    self.element_at_pointer = Some(HitTarget::Param(param_id));
+                    return;
+                }
+            }
+            for &(dom_id, action_id) in ACTION_WIDGETS {
+                if self.doc.get_element_by_id(dom_id) == Some(id) {
+                    self.element_at_pointer = Some(HitTarget::Action(action_id));
                     return;
                 }
             }
@@ -82,7 +84,7 @@ impl View {
         }
     }
 
-    pub fn element_at_pointer(&self) -> Option<usize> {
+    pub fn element_at_pointer(&self) -> Option<HitTarget> {
         self.element_at_pointer
     }
 
@@ -204,8 +206,8 @@ impl View {
             mutator.append_children(span, &[text]);
         }
 
-        if let Some(node) = self.doc.get_element_by_id("load-model") {
-            let hovered = self.element_at_pointer == Some(Parameter::<LoadModel, Action>::ID);
+        if let Some(node) = self.doc.get_element_by_id(LoadModelAction.dom_id()) {
+            let hovered = self.element_at_pointer == Some(HitTarget::Action(LoadModelAction::ID));
             let mut mutator = self.doc.mutate();
             if hovered {
                 mutator.set_style_property(node, "background-color", "#f59e0b");

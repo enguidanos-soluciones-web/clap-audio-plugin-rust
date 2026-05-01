@@ -102,10 +102,6 @@ impl Widget for Parameter<InputGain, Range> {
         "input-gain"
     }
 
-    fn param_id(&self) -> usize {
-        Self::ID
-    }
-
     fn draw(
         &self,
         scene: &mut Scene,

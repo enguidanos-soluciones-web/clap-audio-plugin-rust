@@ -7,3 +7,9 @@ pub mod text;
 pub mod view;
 pub mod widget;
 pub mod window_handler;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HitTarget {
+    Param(usize),
+    Action(usize),
+}

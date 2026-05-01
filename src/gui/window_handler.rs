@@ -1,8 +1,9 @@
 use crate::{
+    actions::any::AnyAction,
     channel::Sender,
     clap::clap_host_t,
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{gpu::Gpu, platform::set_window_background_color, view::View},
+    gui::{HitTarget, gpu::Gpu, platform::set_window_background_color, view::View},
     state::{GUIShared, GuiRequest, ParamChange, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
@@ -105,46 +106,44 @@ impl BaseWindowHandlers for WindowHandler {
                 let x = self.cursor_pos.x;
                 let y = self.cursor_pos.y;
 
-                let Some(index) = self.view.element_at_pointer() else {
-                    return EventStatus::Captured;
-                };
+                match self.view.element_at_pointer() {
+                    None => {}
 
-                let now = Instant::now();
-
-                // Single-click: fire actions (e.g. open file browser). Actions do not
-                // participate in double-click or drag, so return immediately.
-                if let Some(clickable) = ActiveClick::from_index(index) {
-                    if let Some(request) = clickable.on_single_click() {
-                        let _ = self.gui_requests.push(request);
-                        self.request_host_callback();
-                        return EventStatus::Captured;
-                    }
-                }
-
-                let is_double_click = self
-                    .cursor_last_click
-                    .take()
-                    .is_some_and(|(t, i)| i == index && now.duration_since(t).as_millis() < 400);
-
-                if is_double_click {
-                    if let Some(clickable) = ActiveClick::from_index(index) {
-                        if let Some(change) = clickable.on_double_click() {
-                            let _ = self.gui_changes.push(ParamChange {
-                                id: change.index,
-                                value: change.value,
-                            });
+                    Some(HitTarget::Action(id)) => {
+                        if let Ok(action) = AnyAction::try_from(id) {
+                            let _ = self.gui_requests.push(action.on_click());
                             self.request_host_callback();
                         }
+                    }
 
-                        return EventStatus::Captured;
+                    Some(HitTarget::Param(index)) => {
+                        let now = Instant::now();
+
+                        let is_double_click = self
+                            .cursor_last_click
+                            .take()
+                            .is_some_and(|(t, i)| i == index && now.duration_since(t).as_millis() < 400);
+
+                        if is_double_click {
+                            if let Some(clickable) = ActiveClick::from_index(index) {
+                                if let Some(change) = clickable.on_double_click() {
+                                    let _ = self.gui_changes.push(ParamChange {
+                                        id: change.index,
+                                        value: change.value,
+                                    });
+                                    self.request_host_callback();
+                                }
+                            }
+                            return EventStatus::Captured;
+                        }
+
+                        self.cursor_last_click = Some((now, index));
+
+                        let snapshot = self.params_snapshot.load();
+                        let raw = snapshot.values.get(index).copied().unwrap_or(0.0);
+                        self.cursor_drag = ActiveDrag::from_index(index, x, y, raw);
                     }
                 }
-
-                self.cursor_last_click = Some((now, index));
-
-                let snapshot = self.params_snapshot.load();
-                let raw = snapshot.values.get(index).copied().unwrap_or(0.0);
-                self.cursor_drag = ActiveDrag::from_index(index, x, y, raw);
 
                 EventStatus::Captured
             }

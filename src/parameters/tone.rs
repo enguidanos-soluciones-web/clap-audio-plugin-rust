@@ -108,10 +108,6 @@ impl Widget for Parameter<Tone, Range> {
         "tone"
     }
 
-    fn param_id(&self) -> usize {
-        Self::ID
-    }
-
     fn draw(
         &self,
         scene: &mut Scene,

@@ -5,6 +5,7 @@ pub mod clap {
     include!(concat!(env!("OUT_DIR"), "/clap.rs"));
 }
 
+mod actions;
 mod channel;
 mod descriptor;
 mod dsp;
