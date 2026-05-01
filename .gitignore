@@ -7,6 +7,3 @@ out/
 compile_commands.json
 
 src/gui/app/style/output.css
-node_modules/
-
-blitz/

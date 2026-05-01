@@ -4,7 +4,7 @@ lib_name    := "neural_amp_modeler"
 build_dir   := "target/release"
 
 styles:
-    npx @tailwindcss/cli -i ./src/gui/app/style/index.css -o ./src/gui/app/style/output.css -m
+    tailwindcss -i ./src/gui/app/style/index.css -o ./src/gui/app/style/output.css -m
 
 build:
     just styles
