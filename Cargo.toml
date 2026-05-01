@@ -46,5 +46,8 @@ cxx-build = "1.0.194"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"
 
+[features]
+resize = []
+
 [lints.clippy]
 unwrap_used = "deny"

@@ -2,18 +2,18 @@
 //
 //  ┌─────────────────────────────────────────────────────────────────────────────────┐
 //  │ GUI THREAD  (baseview)                                                          │
-//  │  WindowHandler                                                                  │
+//  │  WindowHandler / Dioxus components                                              │
 //  │  · on_frame  — reads  param_snapshot (ArcSwap, lock-free)                       │
-//  │  · on_event  — writes gui_changes Sender<ParamChange>                           │
+//  │  · on_event  — writes gui_requests Sender<GuiRequest>                           │
 //  │              — calls  host.request_callback() [thread-safe]                     │
 //  └──────────────────────────────┬──────────────────────────────────────────────────┘
-//                                 │ gui_changes
-//                                 │ Sender<ParamChange>  ───────────────────────────-┐
+//                                 │ gui_requests
+//                                 │ Sender<GuiRequest>  ────────────────────────────-┐
 //                                 ▼                                                  │
 //  ┌─────────────────────────────────────────────────────────────────────────────────┤
 //  │ MAIN THREAD  (host-managed)                                                     │
 //  │  on_main_thread()                                                               │
-//  │  · drains gui_changes  Receiver<ParamChange>  → updates param_snapshot          │
+//  │  · drains gui_requests Receiver<GuiRequest>   → updates param_snapshot          │
 //  │                                               → pushes  param_changes           │
 //  │  · drains daw_events   Receiver<ParamEvent>                                     │
 //  │      Automation  → updates param_snapshot                                       │
@@ -91,24 +91,26 @@ pub unsafe extern "C" fn init(plugin: *const clap_plugin_t) -> bool {
 
     let (param_changes_tx, _) = channel::<ParamChange>(64);
     let (_, daw_events_rx) = channel::<ParamEvent>(64);
-    let (_, gui_changes_rx) = channel::<ParamChange>(64);
 
     let param_snapshot = Arc::new(ArcSwap::new(Arc::new(ParamSnapshot {
         values: [0.0; PARAMS_COUNT],
     })));
 
     let (model_updates_tx, _model_updates_rx) = channel::<ModelUpdate>(1);
-    let (_, gui_requests_rx) = channel::<GuiRequest>(4);
+    let (_, gui_requests_rx) = channel::<GuiRequest>(128);
 
     plugin_ref.main_thread = Some(MainThreadState {
         param_snapshot,
         daw_events: daw_events_rx,
-        gui_changes: gui_changes_rx,
         param_changes: param_changes_tx,
         gui_shared: Default::default(),
         gui_window: None,
+        #[cfg(feature = "resize")]
+        gui_parent: 0,
         gui_width: 800,
         gui_height: 400,
+        #[cfg(feature = "resize")]
+        gui_needs_reopen: false,
         model_updates: model_updates_tx,
         gui_requests: gui_requests_rx,
         selected_model_path: None,
@@ -291,18 +293,20 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
     let main = plugin_ref.main_thread.as_mut().expect("main thread not initialized");
     main.assert_main_thread();
 
+    // 0. Deferred GUI reopen after resize
+    #[cfg(feature = "resize")]
+    if main.gui_needs_reopen && main.gui_parent != 0 {
+        main.gui_needs_reopen = false;
+        if let Some(mut w) = main.gui_window.take() {
+            w.close();
+        }
+        crate::extensions::gui::open_window(main, plugin_ref.host as usize);
+    }
+
     let mut snapshot_dirty = false;
     let mut new_snapshot = *main.param_snapshot.load_full();
 
-    // 1. Changes on the GUI
-    while let Some(change) = main.gui_changes.pop() {
-        new_snapshot.values[change.id] = change.value;
-        // propagates into audio-thread
-        let _ = main.param_changes.push(change);
-        snapshot_dirty = true;
-    }
-
-    // 2. Events from audio-thread (automation + acks + nacks)
+    // 1. Events from audio-thread (automation + acks + nacks)
     while let Some(event) = main.daw_events.pop() {
         match event {
             ParamEvent::Automation { id, value } => {
@@ -370,6 +374,13 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
                 new_snapshot.values[change.index] = change.value;
                 snapshot_dirty = true;
                 let _ = main.param_changes.push(ParamChange { id: change.index, value: change.value });
+            }
+            GuiRequest::SetParam(id, value) => {
+                if id < new_snapshot.values.len() {
+                    new_snapshot.values[id] = value;
+                    snapshot_dirty = true;
+                    let _ = main.param_changes.push(ParamChange { id, value });
+                }
             }
         }
     }

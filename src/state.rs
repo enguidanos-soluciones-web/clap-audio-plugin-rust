@@ -15,6 +15,8 @@ pub enum GuiRequest {
     OpenFileBrowser,
     /// User double-clicked a knob — main thread should reset the parameter to its default value.
     ResetParam(usize),
+    /// User dragged a knob — main thread should apply the new parameter value.
+    SetParam(usize, f64),
 }
 
 #[derive(Debug)]
@@ -95,13 +97,16 @@ pub struct MainThreadState {
     pub param_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
     pub daw_events: Receiver<ParamEvent>,
-    pub gui_changes: Receiver<ParamChange>,
     pub param_changes: Sender<ParamChange>,
 
     pub gui_shared: Arc<ArcSwap<GUIShared>>,
     pub gui_window: Option<baseview::WindowHandle>,
+    #[cfg(feature = "resize")]
+    pub gui_parent: usize, // platform window handle (NSView*, HWND, XID) stored as usize
     pub gui_width: u32,
     pub gui_height: u32,
+    #[cfg(feature = "resize")]
+    pub gui_needs_reopen: bool,
 
     pub model_updates: Sender<ModelUpdate>,
     pub gui_requests: Receiver<GuiRequest>,

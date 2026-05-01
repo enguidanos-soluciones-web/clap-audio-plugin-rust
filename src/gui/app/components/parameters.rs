@@ -1,4 +1,5 @@
 use crate::{
+    gestures::drag::ActiveDrag,
     gui::app::{dispatcher::Dispatcher, state::AppState},
     parameters::{Parameter, Range, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::GuiRequest,
@@ -9,6 +10,8 @@ use dioxus::prelude::*;
 pub fn Parameters() -> Element {
     let state = consume_context::<Signal<AppState>>();
     let dispatcher = consume_context::<Dispatcher>();
+
+    let mut drag = consume_context::<Signal<Option<ActiveDrag>>>();
 
     let input_db = format!("{:.1} db", state.read().params[Parameter::<InputGain, Range>::ID]);
     let output_db = format!("{:.1} db", state.read().params[Parameter::<OutputGain, Range>::ID]);
@@ -25,7 +28,15 @@ pub fn Parameters() -> Element {
                     div {
                         id: "blend",
                         class: "w-20 h-20",
-                        ondblclick: {
+                        onmousedown: {
+                            let state = state.clone();
+                            move |e| {
+                                let coords = e.data().client_coordinates();
+                                let raw = state.read().params[Parameter::<Blend, Range>::ID];
+                                drag.set(ActiveDrag::from_index(Parameter::<Blend, Range>::ID, coords.x, coords.y, raw));
+                            }
+                        },
+                        ondoubleclick: {
                             let dispatcher = dispatcher.clone();
                             move |_| dispatcher(GuiRequest::ResetParam(Parameter::<Blend, Range>::ID))
                         },
@@ -39,7 +50,15 @@ pub fn Parameters() -> Element {
                     div {
                         id: "input-gain",
                         class: "w-20 h-20",
-                        ondblclick: {
+                        onmousedown: {
+                            let state = state.clone();
+                            move |e| {
+                                let coords = e.data().client_coordinates();
+                                let raw = state.read().params[Parameter::<InputGain, Range>::ID];
+                                drag.set(ActiveDrag::from_index(Parameter::<InputGain, Range>::ID, coords.x, coords.y, raw));
+                            }
+                        },
+                        ondoubleclick: {
                             let dispatcher = dispatcher.clone();
                             move |_| dispatcher(GuiRequest::ResetParam(Parameter::<InputGain, Range>::ID))
                         },
@@ -53,7 +72,15 @@ pub fn Parameters() -> Element {
                     div {
                         id: "tone",
                         class: "w-20 h-20",
-                        ondblclick: {
+                        onmousedown: {
+                            let state = state.clone();
+                            move |e| {
+                                let coords = e.data().client_coordinates();
+                                let raw = state.read().params[Parameter::<Tone, Range>::ID];
+                                drag.set(ActiveDrag::from_index(Parameter::<Tone, Range>::ID, coords.x, coords.y, raw));
+                            }
+                        },
+                        ondoubleclick: {
                             let dispatcher = dispatcher.clone();
                             move |_| dispatcher(GuiRequest::ResetParam(Parameter::<Tone, Range>::ID))
                         },
@@ -67,7 +94,15 @@ pub fn Parameters() -> Element {
                     div {
                         id: "output-gain",
                         class: "w-20 h-20",
-                        ondblclick: {
+                        onmousedown: {
+                            let state = state.clone();
+                            move |e| {
+                                let coords = e.data().client_coordinates();
+                                let raw = state.read().params[Parameter::<OutputGain, Range>::ID];
+                                drag.set(ActiveDrag::from_index(Parameter::<OutputGain, Range>::ID, coords.x, coords.y, raw));
+                            }
+                        },
+                        ondoubleclick: {
                             let dispatcher = dispatcher.clone();
                             move |_| dispatcher(GuiRequest::ResetParam(Parameter::<OutputGain, Range>::ID))
                         },

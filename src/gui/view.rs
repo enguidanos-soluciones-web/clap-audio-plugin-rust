@@ -33,6 +33,7 @@ pub struct View {
     pub app_state: Signal<AppState>,
     pub pointer: (f64, f64),
     pub element_at_pointer: Option<HitTarget>,
+    pub held_buttons: MouseEventButtons,
 }
 
 impl View {
@@ -70,6 +71,7 @@ impl View {
             app_state,
             pointer: (0.0, 0.0),
             element_at_pointer: None,
+            held_buttons: MouseEventButtons::None,
         }
     }
 
@@ -79,14 +81,20 @@ impl View {
             window_size: (width as u32, height as u32),
             ..Viewport::default()
         });
+        // Mark all nodes dirty so flush_styles_to_layout re-propagates
+        // viewport-dependent sizes (h-full, w-full, flex-1) on next resolve().
+        let root_id = inner.root_element().id;
+        inner.get_node(root_id).map(|n| n.set_dirty_descendants());
     }
 
     pub fn send_pointer_down(&mut self, x: f64, y: f64, button: MouseButton) {
+        self.held_buttons |= mouse_button_mask(button);
         let ui_event = UiEvent::PointerDown(self.make_pointer_event(x, y, mouse_button(button)));
         self.doc.handle_ui_event(ui_event);
     }
 
     pub fn send_pointer_up(&mut self, x: f64, y: f64, button: MouseButton) {
+        self.held_buttons &= !mouse_button_mask(button);
         let ui_event = UiEvent::PointerUp(self.make_pointer_event(x, y, mouse_button(button)));
         self.doc.handle_ui_event(ui_event);
     }
@@ -106,7 +114,7 @@ impl View {
             is_primary: true,
             coords,
             button,
-            buttons: MouseEventButtons::None,
+            buttons: self.held_buttons,
             mods: Modifiers::empty(),
             details: PointerDetails::default(),
         }
@@ -136,10 +144,6 @@ impl View {
             }
             node_id = inner.get_node(id).and_then(|n| n.parent);
         }
-    }
-
-    pub fn element_at_pointer(&self) -> Option<HitTarget> {
-        self.element_at_pointer
     }
 
     pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
@@ -233,5 +237,16 @@ fn mouse_button(button: MouseButton) -> MouseEventButton {
         MouseButton::Back => MouseEventButton::Fourth,
         MouseButton::Forward => MouseEventButton::Fifth,
         MouseButton::Other(_) => MouseEventButton::Main,
+    }
+}
+
+fn mouse_button_mask(button: MouseButton) -> MouseEventButtons {
+    match button {
+        MouseButton::Left => MouseEventButtons::Primary,
+        MouseButton::Right => MouseEventButtons::Secondary,
+        MouseButton::Middle => MouseEventButtons::Auxiliary,
+        MouseButton::Back => MouseEventButtons::Fourth,
+        MouseButton::Forward => MouseEventButtons::Fifth,
+        MouseButton::Other(_) => MouseEventButtons::None,
     }
 }
