@@ -46,6 +46,7 @@ use crate::{
     descriptor::PLUGIN_DESCRIPTOR,
     dsp::{self, dc_filter::DcFilter, klon_buffer::KlonBuffer, lowpass_filter::LowPassFilter},
     extensions::{audio_ports::AUDIO_PORTS_EXT, gui::GUI_EXT, parameters::PARAMETERS_EXT, state::STATE_EXT},
+    gestures::click::ActiveClick,
     helper::{DecibelConversion, db_to_linear},
     parameters::any::PARAMS_COUNT,
     plugin,
@@ -361,6 +362,14 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
                     model,
                     loudness_correction,
                 });
+            }
+            GuiRequest::ResetParam(id) => {
+                let Some(change) = ActiveClick::from_index(id).and_then(|c| c.on_double_click()) else {
+                    continue;
+                };
+                new_snapshot.values[change.index] = change.value;
+                snapshot_dirty = true;
+                let _ = main.param_changes.push(ParamChange { id: change.index, value: change.value });
             }
         }
     }

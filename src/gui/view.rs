@@ -1,4 +1,14 @@
+use crate::{
+    gui::{
+        HitTarget,
+        app::{dispatcher::Dispatcher, layout::Layout, state::AppState},
+        widget::Widget,
+    },
+    parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
+    state::GUIShared,
+};
 use anyrender_vello::VelloScenePainter;
+use baseview::MouseButton;
 use blitz_dom::{Document, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
@@ -10,16 +20,6 @@ use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_native_dom::DioxusDocument;
 use keyboard_types::Modifiers;
 use vello::Scene;
-
-use crate::{
-    gui::{
-        HitTarget,
-        app::{dispatcher::Dispatcher, layout::Layout, state::AppState},
-        widget::Widget,
-    },
-    parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
-    state::GUIShared,
-};
 
 const PARAM_WIDGETS: &[(&str, usize)] = &[
     ("input-gain", Parameter::<InputGain, Range>::ID),
@@ -81,6 +81,16 @@ impl View {
         });
     }
 
+    pub fn send_pointer_down(&mut self, x: f64, y: f64, button: MouseButton) {
+        let ui_event = UiEvent::PointerDown(self.make_pointer_event(x, y, mouse_button(button)));
+        self.doc.handle_ui_event(ui_event);
+    }
+
+    pub fn send_pointer_up(&mut self, x: f64, y: f64, button: MouseButton) {
+        let ui_event = UiEvent::PointerUp(self.make_pointer_event(x, y, mouse_button(button)));
+        self.doc.handle_ui_event(ui_event);
+    }
+
     fn make_pointer_event(&self, x: f64, y: f64, button: MouseEventButton) -> BlitzPointerEvent {
         let coords = PointerCoords {
             page_x: x as f32,
@@ -96,7 +106,7 @@ impl View {
             is_primary: true,
             coords,
             button,
-            buttons: MouseEventButtons::empty(),
+            buttons: MouseEventButtons::None,
             mods: Modifiers::empty(),
             details: PointerDetails::default(),
         }
@@ -126,16 +136,6 @@ impl View {
             }
             node_id = inner.get_node(id).and_then(|n| n.parent);
         }
-    }
-
-    pub fn send_pointer_down(&mut self, x: f64, y: f64) {
-        let ui_event = UiEvent::PointerDown(self.make_pointer_event(x, y, MouseEventButton::Main));
-        self.doc.handle_ui_event(ui_event);
-    }
-
-    pub fn send_pointer_up(&mut self, x: f64, y: f64) {
-        let ui_event = UiEvent::PointerUp(self.make_pointer_event(x, y, MouseEventButton::Main));
-        self.doc.handle_ui_event(ui_event);
     }
 
     pub fn element_at_pointer(&self) -> Option<HitTarget> {
@@ -222,5 +222,16 @@ impl View {
             s.model_name = state.model_name.clone();
             s.model_rate = state.nam_model_rate;
         });
+    }
+}
+
+fn mouse_button(button: MouseButton) -> MouseEventButton {
+    match button {
+        MouseButton::Left => MouseEventButton::Main,
+        MouseButton::Middle => MouseEventButton::Auxiliary,
+        MouseButton::Right => MouseEventButton::Secondary,
+        MouseButton::Back => MouseEventButton::Fourth,
+        MouseButton::Forward => MouseEventButton::Fifth,
+        MouseButton::Other(_) => MouseEventButton::Main,
     }
 }

@@ -13,6 +13,8 @@ use std::sync::Arc;
 pub enum GuiRequest {
     /// User clicked "Load Model" — main thread should open a file browser and load the selected NAM file.
     OpenFileBrowser,
+    /// User double-clicked a knob — main thread should reset the parameter to its default value.
+    ResetParam(usize),
 }
 
 #[derive(Debug)]

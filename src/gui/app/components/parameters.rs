@@ -1,12 +1,14 @@
 use crate::{
-    gui::app::state::AppState,
+    gui::app::{dispatcher::Dispatcher, state::AppState},
     parameters::{Parameter, Range, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
+    state::GuiRequest,
 };
 use dioxus::prelude::*;
 
 #[component]
 pub fn Parameters() -> Element {
     let state = consume_context::<Signal<AppState>>();
+    let dispatcher = consume_context::<Dispatcher>();
 
     let input_db = format!("{:.1} db", state.read().params[Parameter::<InputGain, Range>::ID]);
     let output_db = format!("{:.1} db", state.read().params[Parameter::<OutputGain, Range>::ID]);
@@ -20,28 +22,56 @@ pub fn Parameters() -> Element {
                 div {
                     class: "flex flex-col items-center gap-2.5",
                     span { id: "blend-val", class: "text-amber-500 text-sm", "{blend_val}" }
-                    div { id: "blend", class: "w-20 h-20" }
+                    div {
+                        id: "blend",
+                        class: "w-20 h-20",
+                        ondblclick: {
+                            let dispatcher = dispatcher.clone();
+                            move |_| dispatcher(GuiRequest::ResetParam(Parameter::<Blend, Range>::ID))
+                        },
+                    }
                     span { class: "text-xs font-semibold tracking-widest uppercase text-neutral-400", "Blend" }
                 }
 
                 div {
                     class: "flex flex-col items-center gap-2.5",
                     span { id: "input-gain-db", class: "text-amber-500 text-sm", "{input_db}" }
-                    div { id: "input-gain", class: "w-20 h-20" }
+                    div {
+                        id: "input-gain",
+                        class: "w-20 h-20",
+                        ondblclick: {
+                            let dispatcher = dispatcher.clone();
+                            move |_| dispatcher(GuiRequest::ResetParam(Parameter::<InputGain, Range>::ID))
+                        },
+                    }
                     span { class: "text-xs font-semibold tracking-widest uppercase text-neutral-400", "Gain" }
                 }
 
                 div {
                     class: "flex flex-col items-center gap-2.5",
                     span { id: "tone-val", class: "text-amber-500 text-sm", "{tone_val}" }
-                    div { id: "tone", class: "w-20 h-20" }
+                    div {
+                        id: "tone",
+                        class: "w-20 h-20",
+                        ondblclick: {
+                            let dispatcher = dispatcher.clone();
+                            move |_| dispatcher(GuiRequest::ResetParam(Parameter::<Tone, Range>::ID))
+                        },
+                    }
                     span { class: "text-xs font-semibold tracking-widest uppercase text-neutral-400", "Tone" }
                 }
 
                 div {
                     class: "flex flex-col items-center gap-2.5",
                     span { id: "output-gain-db", class: "text-amber-500 text-sm", "{output_db}" }
-                    div { id: "output-gain", class: "w-20 h-20" }
+                    div {
+                        id: "output-gain",
+                        class: "w-20 h-20",
+                        ondblclick: {
+                            let dispatcher = dispatcher.clone();
+                            move |_| dispatcher(GuiRequest::ResetParam(Parameter::<OutputGain, Range>::ID))
+                        },
+                    }
                     span { class: "text-xs font-semibold tracking-widest uppercase text-neutral-400", "Master" }
                 }
         }
