@@ -7,7 +7,7 @@ use vello::Scene;
 
 use crate::{
     actions::{Action, load_model::LoadModel as LoadModelAction},
-    gui::{HitTarget, text::TextRenderer, widget::Widget},
+    gui::{HitTarget, widget::Widget},
     parameters::{Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, output_gain::OutputGain, tone::Tone},
     state::GUIShared,
 };
@@ -25,7 +25,6 @@ pub struct View {
     pub doc: HtmlDocument,
     pub pointer: (f64, f64),
     pub element_at_pointer: Option<HitTarget>,
-    pub text: TextRenderer,
 }
 
 impl View {
@@ -45,7 +44,6 @@ impl View {
             doc,
             pointer: (0.0, 0.0),
             element_at_pointer: None,
-            text: TextRenderer::new(),
         }
     }
 
@@ -119,14 +117,7 @@ impl View {
             return;
         };
 
-        widget.draw(
-            scene,
-            &mut self.text,
-            (rect.x, rect.y),
-            (rect.width, rect.height),
-            self.pointer,
-            value,
-        );
+        widget.draw(scene, (rect.x, rect.y), (rect.width, rect.height), self.pointer, value);
     }
 
     pub fn draw_widgets(&mut self, scene: &mut Scene, parameters_values: &[f64; PARAMS_COUNT]) {

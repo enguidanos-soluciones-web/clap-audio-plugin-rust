@@ -3,7 +3,6 @@ use super::{
 };
 use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
-use crate::gui::text::TextRenderer;
 use crate::gui::widget::Widget;
 use std::f64::consts::PI;
 use vello::{
@@ -102,15 +101,7 @@ impl Widget for Parameter<InputGain, Range> {
         "input-gain"
     }
 
-    fn draw(
-        &self,
-        scene: &mut Scene,
-        _text: &mut TextRenderer,
-        coordinates: (f64, f64),
-        dimensions: (f64, f64),
-        _cursor: (f64, f64),
-        value: f64,
-    ) {
+    fn draw(&self, scene: &mut Scene, coordinates: (f64, f64), dimensions: (f64, f64), _cursor: (f64, f64), value: f64) {
         let (x, y) = coordinates;
         let (width, height) = dimensions;
 
