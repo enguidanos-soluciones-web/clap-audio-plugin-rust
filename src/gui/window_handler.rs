@@ -89,9 +89,6 @@ impl BaseWindowHandlers for WindowHandler {
         let snapshot = self.params_snapshot.load();
         let gui_shared = self.gui_shared.load();
 
-        self.view
-            .set_pointer(self.cursor_pos.x, self.cursor_pos.y, self.cursor_drag.is_some());
-
         self.content_scene.reset();
         self.view.render(&mut self.content_scene, &gui_shared, &snapshot.values);
 
@@ -159,6 +156,7 @@ impl BaseWindowHandlers for WindowHandler {
             }
             Event::Mouse(MouseEvent::CursorMoved { position, .. }) => {
                 self.cursor_pos = position;
+                self.view.hit_test(position.x, position.y);
 
                 if let Some(cursor_drag) = &self.cursor_drag {
                     if let Some(change) = cursor_drag.on_drag(position.x, position.y) {

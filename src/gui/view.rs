@@ -9,11 +9,19 @@ use vello::Scene;
 use crate::{
     gui::{text::TextRenderer, widget::Widget},
     parameters::{
-        Action, Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, load_model::LoadModel, output_gain::OutputGain,
-        tone::Tone,
+        Action, Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain,
+        load_model::LoadModel, output_gain::OutputGain, tone::Tone,
     },
     state::GUIShared,
 };
+
+const WIDGETS: &[(&str, usize)] = &[
+    ("load-model", Parameter::<LoadModel, Action>::ID),
+    ("input-gain", Parameter::<InputGain, Range>::ID),
+    ("output-gain", Parameter::<OutputGain, Range>::ID),
+    ("tone", Parameter::<Tone, Range>::ID),
+    ("blend", Parameter::<Blend, Range>::ID),
+];
 
 pub struct View {
     pub doc: HtmlDocument,
@@ -50,8 +58,32 @@ impl View {
         });
     }
 
-    pub fn set_pointer(&mut self, x: f64, y: f64, _is_down: bool) {
+    /// Called on every CursorMoved event. Single source of truth for pointer position
+    /// and hit testing — sets both `self.pointer` and `self.element_at_pointer`.
+    pub fn hit_test(&mut self, x: f64, y: f64) {
         self.pointer = (x, y);
+        self.element_at_pointer = None;
+
+        let Some(hit) = self.doc.hit(x as f32, y as f32) else {
+            return;
+        };
+
+        // Walk up the DOM from the hit node to find a widget element.
+        // hit() returns the innermost node (may be a text node inside the widget div).
+        let mut node_id = Some(hit.node_id);
+        while let Some(id) = node_id {
+            for &(dom_id, param_id) in WIDGETS {
+                if self.doc.get_element_by_id(dom_id) == Some(id) {
+                    self.element_at_pointer = Some(param_id);
+                    return;
+                }
+            }
+            node_id = self.doc.get_node(id).and_then(|n| n.parent);
+        }
+    }
+
+    pub fn element_at_pointer(&self) -> Option<usize> {
+        self.element_at_pointer
     }
 
     pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
@@ -73,13 +105,7 @@ impl View {
             );
         }
 
-        self.element_at_pointer = None;
-
         self.draw_widgets(scene, parameters_values);
-    }
-
-    pub fn element_at_pointer(&self) -> Option<usize> {
-        self.element_at_pointer
     }
 
     pub fn draw_widget(&mut self, scene: &mut Scene, widget: &dyn Widget, value: f64) {
@@ -90,13 +116,6 @@ impl View {
         let Some(rect) = self.doc.get_client_bounding_rect(node_id) else {
             return;
         };
-
-        let (px, py) = (self.pointer.0 as f64, self.pointer.1 as f64);
-        let within_x = px >= rect.x && px <= rect.x + rect.width;
-        let within_y = py >= rect.y && py <= rect.y + rect.height;
-        if within_x && within_y {
-            self.element_at_pointer = Some(widget.param_id());
-        }
 
         widget.draw(
             scene,
@@ -109,8 +128,6 @@ impl View {
     }
 
     pub fn draw_widgets(&mut self, scene: &mut Scene, parameters_values: &[f64; PARAMS_COUNT]) {
-        self.draw_widget(scene, &Parameter::<LoadModel, Action>::new(), 0.0);
-
         self.draw_widget(
             scene,
             &Parameter::<InputGain, Range>::new(),
@@ -185,6 +202,18 @@ impl View {
             mutator.remove_and_drop_all_children(span);
             let text = mutator.create_text_node(&format!("{:.0}%", parameters_values[blend_id] * 100.));
             mutator.append_children(span, &[text]);
+        }
+
+        if let Some(node) = self.doc.get_element_by_id("load-model") {
+            let hovered = self.element_at_pointer == Some(Parameter::<LoadModel, Action>::ID);
+            let mut mutator = self.doc.mutate();
+            if hovered {
+                mutator.set_style_property(node, "background-color", "#f59e0b");
+                mutator.set_style_property(node, "color", "#171717");
+            } else {
+                mutator.remove_style_property(node, "background-color");
+                mutator.remove_style_property(node, "color");
+            }
         }
     }
 }

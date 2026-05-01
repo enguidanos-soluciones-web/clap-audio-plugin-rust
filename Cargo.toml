@@ -17,7 +17,7 @@ opt-level = 2
 arc-swap = "1.9.1"
 anyrender_vello = "0.8"
 baseview = { git = "https://github.com/RustAudio/baseview" }
-blitz-dom = { git = "https://github.com/DioxusLabs/blitz", features = ["incremental"] }
+blitz-dom = { git = "https://github.com/DioxusLabs/blitz" }
 blitz-html = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-paint = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-traits = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
