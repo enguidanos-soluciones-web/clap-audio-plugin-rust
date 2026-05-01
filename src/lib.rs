@@ -5,7 +5,6 @@ pub mod clap {
     include!(concat!(env!("OUT_DIR"), "/clap.rs"));
 }
 
-mod actions;
 mod channel;
 mod descriptor;
 mod dsp;
@@ -15,6 +14,7 @@ mod factory;
 mod gestures;
 mod gui;
 mod helper;
+mod host_notifier;
 mod parameters;
 mod plugin;
 mod processors;

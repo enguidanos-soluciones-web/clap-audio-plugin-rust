@@ -18,9 +18,12 @@ arc-swap = "1.9.1"
 anyrender_vello = "0.8"
 baseview = { git = "https://github.com/RustAudio/baseview" }
 blitz-dom = { git = "https://github.com/DioxusLabs/blitz" }
-blitz-html = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-paint = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
 blitz-traits = { git = "https://github.com/DioxusLabs/blitz", default-features = false }
+dioxus-native-dom = { git = "https://github.com/DioxusLabs/blitz", default-features = false, features = ["system-fonts"] }
+dioxus = { version = "0.7.7", features = ["macro"] }
+dioxus-core = "0.7.7"
+keyboard-types = "0.7"
 cxx = "1.0.194"
 pollster = "0.4.0"
 raw-window-handle = "0.5"

@@ -62,7 +62,6 @@ use std::{
     sync::Arc,
 };
 
-
 pub struct Plugin {
     pub inner: clap_plugin_t,
     pub host: *const clap_host_t,
@@ -161,19 +160,25 @@ pub unsafe extern "C" fn activate(plugin: *const clap_plugin, sample_rate: f64, 
 
             const NAM_TARGET_LOUDNESS_DBFS: f64 = -12.0;
             let loudness_correction = if dsp::nam::ffi::has_loudness(&nam_model) {
-                db_to_linear(NAM_TARGET_LOUDNESS_DBFS - dsp::nam::ffi::get_loudness(&nam_model), DecibelConversion::Amplitude)
+                db_to_linear(
+                    NAM_TARGET_LOUDNESS_DBFS - dsp::nam::ffi::get_loudness(&nam_model),
+                    DecibelConversion::Amplitude,
+                )
             } else {
                 1.0
             };
 
-            let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json) as u64;
+            let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json);
 
             let mut new_gui_shared = main_thread.gui_shared.load_full().as_ref().clone();
             new_gui_shared.nam_model_rate = Some(model_rate);
             new_gui_shared.model_name = Some(model_name);
             main_thread.gui_shared.store(Arc::new(new_gui_shared));
 
-            let _ = main_thread.model_updates.push(ModelUpdate { model: nam_model, loudness_correction });
+            let _ = main_thread.model_updates.push(ModelUpdate {
+                model: nam_model,
+                loudness_correction,
+            });
         }
     }
 
@@ -333,7 +338,7 @@ pub unsafe extern "C" fn on_main_thread(plugin: *const clap_plugin) {
                     1.0
                 };
 
-                let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json) as u64;
+                let model_rate = dsp::nam::ffi::get_sample_rate_from_nam_file(&json);
                 let model_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
                 main.selected_model_path = Some(path.to_string_lossy().into_owned());
 

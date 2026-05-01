@@ -120,6 +120,6 @@ impl MainThreadState {
 
 #[derive(Debug, Default, Clone)]
 pub struct GUIShared {
-    pub nam_model_rate: Option<u64>,
+    pub nam_model_rate: Option<f64>,
     pub model_name: Option<String>,
 }

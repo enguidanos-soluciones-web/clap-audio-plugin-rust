@@ -6,5 +6,7 @@ out/
 
 compile_commands.json
 
-src/gui/layout/output.css
+src/gui/app/style/output.css
 node_modules/
+
+blitz/

@@ -1,9 +1,9 @@
 use crate::{
-    actions::any::AnyAction,
     channel::Sender,
     clap::clap_host_t,
     gestures::{click::ActiveClick, drag::ActiveDrag},
-    gui::{HitTarget, gpu::Gpu, platform::set_window_background_color, view::View},
+    gui::{HitTarget, app::dispatcher::Dispatcher, gpu::Gpu, platform::set_window_background_color, view::View},
+    host_notifier::HostNotifier,
     state::{GUIShared, GuiRequest, ParamChange, ParamSnapshot},
 };
 use arc_swap::ArcSwap;
@@ -19,10 +19,9 @@ pub struct WindowHandler {
 
     view: View,
 
-    host: *const clap_host_t,
+    host_notifier: Arc<HostNotifier>,
     gui_shared: Arc<ArcSwap<GUIShared>>,
     gui_changes: Sender<ParamChange>,
-    gui_requests: Sender<GuiRequest>,
     params_snapshot: Arc<ArcSwap<ParamSnapshot>>,
 
     content_scene: Scene,
@@ -32,9 +31,6 @@ pub struct WindowHandler {
     cursor_pos: baseview::Point,
     cursor_last_click: Option<(Instant, usize)>,
 }
-
-// SAFETY: host pointer is valid for plugin lifetime; request_callback is [thread-safe] per CLAP spec.
-unsafe impl Send for WindowHandler {}
 
 impl WindowHandler {
     pub fn new(
@@ -49,17 +45,29 @@ impl WindowHandler {
     ) -> Self {
         set_window_background_color(window);
 
+        let host_notifier = HostNotifier::new(host);
+
+        let dispatch: Dispatcher = {
+            let gui_requests = gui_requests.clone();
+            let host_notifier = Arc::clone(&host_notifier);
+
+            Arc::new(move |req: GuiRequest| {
+                let _ = gui_requests.push(req);
+
+                host_notifier.notify();
+            })
+        };
+
         Self {
             gpu: Gpu::new(window, width, height),
-            view: View::new(width as f64, height as f64),
+            view: View::new(width as f64, height as f64, dispatch),
             width,
             height,
             scale: 1.0,
 
-            host,
+            host_notifier,
             gui_shared,
             gui_changes,
-            gui_requests,
             params_snapshot,
 
             content_scene: Scene::default(),
@@ -72,11 +80,7 @@ impl WindowHandler {
     }
 
     fn request_host_callback(&self) {
-        unsafe {
-            if let Some(request_callback) = (*self.host).request_callback {
-                request_callback(self.host);
-            }
-        }
+        self.host_notifier.notify();
     }
 }
 
@@ -106,15 +110,10 @@ impl BaseWindowHandlers for WindowHandler {
                 let x = self.cursor_pos.x;
                 let y = self.cursor_pos.y;
 
+                self.view.send_pointer_down(x, y);
+
                 match self.view.element_at_pointer() {
                     None => {}
-
-                    Some(HitTarget::Action(id)) => {
-                        if let Ok(action) = AnyAction::try_from(id) {
-                            let _ = self.gui_requests.push(action.on_click());
-                            self.request_host_callback();
-                        }
-                    }
 
                     Some(HitTarget::Param(index)) => {
                         let now = Instant::now();
@@ -150,6 +149,7 @@ impl BaseWindowHandlers for WindowHandler {
             Event::Mouse(MouseEvent::ButtonReleased {
                 button: MouseButton::Left, ..
             }) => {
+                self.view.send_pointer_up(self.cursor_pos.x, self.cursor_pos.y);
                 self.cursor_drag = None;
                 EventStatus::Captured
             }

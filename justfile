@@ -3,13 +3,11 @@ lib_name    := "neural_amp_modeler"
 
 build_dir   := "target/release"
 
-dev:
-    npx @tailwindcss/cli -i ./src/gui/layout/index.css -o ./src/gui/layout/output.css -m
-    cargo build --profile dev
-    clack-host-cpal --file-path target/debug/lib{{lib_name}}.so
+styles:
+    npx @tailwindcss/cli -i ./src/gui/app/style/index.css -o ./src/gui/app/style/output.css -m
 
 build:
-    npx @tailwindcss/cli -i ./src/gui/layout/index.css -o ./src/gui/layout/output.css -m
+    just styles
     cargo build --release
     just bundle
 

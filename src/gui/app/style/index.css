@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@source "../layout.rs";
+@source "../components/**/*.rs";
+
+html,
+body,
+main {
+    width: 100%;
+    height: 100%;
+}
