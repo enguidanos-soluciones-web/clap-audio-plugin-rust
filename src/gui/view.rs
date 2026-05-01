@@ -7,8 +7,11 @@ use blitz_traits::shell::Viewport;
 use vello::Scene;
 
 use crate::{
-    gui::{composition, widget::Widget},
-    parameters::any::PARAMS_COUNT,
+    gui::{text::TextRenderer, widget::Widget},
+    parameters::{
+        Action, Parameter, Range, any::PARAMS_COUNT, blend::Blend, input_gain::InputGain, load_model::LoadModel, output_gain::OutputGain,
+        tone::Tone,
+    },
     state::GUIShared,
 };
 
@@ -16,10 +19,7 @@ pub struct View {
     pub doc: HtmlDocument,
     pub pointer: (f64, f64),
     pub element_at_pointer: Option<usize>,
-
-    dom_dirty: bool,
-    prev_params: [f64; PARAMS_COUNT],
-    prev_gui_shared: GUIShared,
+    pub text: TextRenderer,
 }
 
 impl View {
@@ -39,10 +39,7 @@ impl View {
             doc,
             pointer: (0.0, 0.0),
             element_at_pointer: None,
-            dom_dirty: false,
-            // NaN guarantees first-frame DOM update via != comparison
-            prev_params: [f64::NAN; PARAMS_COUNT],
-            prev_gui_shared: GUIShared::default(),
+            text: TextRenderer::new(),
         }
     }
 
@@ -51,7 +48,6 @@ impl View {
             window_size: (width as u32, height as u32),
             ..Viewport::default()
         });
-        self.dom_dirty = true;
     }
 
     pub fn set_pointer(&mut self, x: f64, y: f64, _is_down: bool) {
@@ -59,23 +55,10 @@ impl View {
     }
 
     pub fn render(&mut self, scene: &mut Scene, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
-        // 1. Mutate DOM text nodes only when values changed
-        let prev_params = self.prev_params;
-        let prev_gui_shared = self.prev_gui_shared.clone();
-        let dom_mutated = composition::update_dom(self, state, parameters_values, &prev_gui_shared, &prev_params);
+        self.update_dom(state, parameters_values);
 
-        if dom_mutated {
-            self.prev_params = *parameters_values;
-            self.prev_gui_shared = state.clone();
-        }
+        self.doc.resolve(0.0);
 
-        // 2. Recompute CSS layout only when DOM is dirty (mutation or resize)
-        if dom_mutated || self.dom_dirty {
-            self.doc.resolve(0.0);
-            self.dom_dirty = false;
-        }
-
-        // 3. Paint HTML/CSS layer
         let viewport = self.doc.viewport();
         {
             let mut painter = VelloScenePainter::new(scene);
@@ -90,9 +73,9 @@ impl View {
             );
         }
 
-        // 4. Draw Vello widgets (pure vector, no DOM dependency)
         self.element_at_pointer = None;
-        composition::draw_widgets(self, scene, parameters_values);
+
+        self.draw_widgets(scene, parameters_values);
     }
 
     pub fn element_at_pointer(&self) -> Option<usize> {
@@ -100,7 +83,7 @@ impl View {
     }
 
     pub fn draw_widget(&mut self, scene: &mut Scene, widget: &dyn Widget, value: f64) {
-        let Some(node_id) = self.doc.get_element_by_id(widget.element_id()) else {
+        let Some(node_id) = self.doc.get_element_by_id(widget.dom_id()) else {
             return;
         };
 
@@ -115,6 +98,93 @@ impl View {
             self.element_at_pointer = Some(widget.param_id());
         }
 
-        widget.draw(scene, rect.x, rect.y, rect.width, rect.height, widget.normalize(value));
+        widget.draw(
+            scene,
+            &mut self.text,
+            (rect.x, rect.y),
+            (rect.width, rect.height),
+            self.pointer,
+            value,
+        );
+    }
+
+    pub fn draw_widgets(&mut self, scene: &mut Scene, parameters_values: &[f64; PARAMS_COUNT]) {
+        self.draw_widget(scene, &Parameter::<LoadModel, Action>::new(), 0.0);
+
+        self.draw_widget(
+            scene,
+            &Parameter::<InputGain, Range>::new(),
+            parameters_values[Parameter::<InputGain, Range>::ID],
+        );
+
+        self.draw_widget(
+            scene,
+            &Parameter::<OutputGain, Range>::new(),
+            parameters_values[Parameter::<OutputGain, Range>::ID],
+        );
+
+        self.draw_widget(
+            scene,
+            &Parameter::<Tone, Range>::new(),
+            parameters_values[Parameter::<Tone, Range>::ID],
+        );
+
+        self.draw_widget(
+            scene,
+            &Parameter::<Blend, Range>::new(),
+            parameters_values[Parameter::<Blend, Range>::ID],
+        );
+    }
+
+    pub fn update_dom(&mut self, state: &GUIShared, parameters_values: &[f64; PARAMS_COUNT]) {
+        if let Some(nam_model_rate) = state.nam_model_rate {
+            if let Some(span) = self.doc.get_element_by_id("nam-model-rate") {
+                let mut mutator = self.doc.mutate();
+                mutator.remove_and_drop_all_children(span);
+                let text = mutator.create_text_node(&format!("Model rate: {nam_model_rate:.0} Hz"));
+                mutator.append_children(span, &[text]);
+            }
+        }
+
+        if let Some(span) = self.doc.get_element_by_id("model-name") {
+            let mut mutator = self.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            if let Some(name) = &state.model_name {
+                let text = mutator.create_text_node(name);
+                mutator.append_children(span, &[text]);
+            }
+        }
+
+        let input_id = Parameter::<InputGain, Range>::ID;
+        if let Some(span) = self.doc.get_element_by_id("input-gain-db") {
+            let mut mutator = self.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.1} db", parameters_values[input_id]));
+            mutator.append_children(span, &[text]);
+        }
+
+        let output_id = Parameter::<OutputGain, Range>::ID;
+        if let Some(span) = self.doc.get_element_by_id("output-gain-db") {
+            let mut mutator = self.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.1} db", parameters_values[output_id]));
+            mutator.append_children(span, &[text]);
+        }
+
+        let tone_id = Parameter::<Tone, Range>::ID;
+        if let Some(span) = self.doc.get_element_by_id("tone-val") {
+            let mut mutator = self.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.1}", parameters_values[tone_id] * 5.));
+            mutator.append_children(span, &[text]);
+        }
+
+        let blend_id = Parameter::<Blend, Range>::ID;
+        if let Some(span) = self.doc.get_element_by_id("blend-val") {
+            let mut mutator = self.doc.mutate();
+            mutator.remove_and_drop_all_children(span);
+            let text = mutator.create_text_node(&format!("{:.0}%", parameters_values[blend_id] * 100.));
+            mutator.append_children(span, &[text]);
+        }
     }
 }

@@ -1916,6 +1916,7 @@ dependencies = [
  "cxx",
  "cxx-build",
  "objc",
+ "parley",
  "pollster",
  "raw-window-handle 0.5.2",
  "rfd",

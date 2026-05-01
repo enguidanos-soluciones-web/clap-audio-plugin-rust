@@ -3,6 +3,7 @@ use super::{
 };
 use crate::gui::colors;
 use crate::gui::helpers::{arc_path, full_circle_path};
+use crate::gui::text::TextRenderer;
 use crate::gui::widget::Widget;
 use std::f64::consts::PI;
 use vello::{
@@ -98,7 +99,7 @@ impl<'a> ParameterClickable<'a, Blend, Range> {
 }
 
 impl Widget for Parameter<Blend, Range> {
-    fn element_id(&self) -> &'static str {
+    fn dom_id(&self) -> &'static str {
         "blend"
     }
 
@@ -106,11 +107,20 @@ impl Widget for Parameter<Blend, Range> {
         Self::ID
     }
 
-    fn normalize(&self, raw: f64) -> f64 {
-        Self::new().normalize(raw)
-    }
+    fn draw(
+        &self,
+        scene: &mut Scene,
+        _text: &mut TextRenderer,
+        coordinates: (f64, f64),
+        dimensions: (f64, f64),
+        _cursor: (f64, f64),
+        value: f64,
+    ) {
+        let (x, y) = coordinates;
+        let (width, height) = dimensions;
 
-    fn draw(&self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64, normalized: f64) {
+        let normalized = self.normalize(value);
+
         const KNOB_START: f64 = 3.0 * PI / 4.0;
         const KNOB_SWEEP: f64 = 3.0 * PI / 2.0;
 
