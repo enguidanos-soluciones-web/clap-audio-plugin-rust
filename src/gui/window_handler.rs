@@ -97,8 +97,8 @@ impl BaseWindowHandlers for WindowHandler {
                 self.width = info.physical_size().width;
                 self.height = info.physical_size().height;
                 self.scale = info.scale();
-                self.view.set_dimensions(self.width as f64 / self.scale, self.height as f64 / self.scale);
-                self.gpu = None; // drop old GPU before creating new one with same window handle
+                self.view
+                    .set_dimensions(self.width as f64 / self.scale, self.height as f64 / self.scale);
                 self.gpu = Gpu::new(window, self.width, self.height);
                 EventStatus::Captured
             }

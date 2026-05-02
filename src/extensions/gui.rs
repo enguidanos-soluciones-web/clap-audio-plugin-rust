@@ -3,16 +3,10 @@ use std::sync::Arc;
 
 use crate::{
     clap::*,
-    gui::window_handler::WindowHandler,
+    gui::{platform::ClapParentWindow, window_handler::WindowHandler},
     plugin::Plugin,
     state::MainThreadState,
 };
-
-#[cfg(feature = "resize")]
-use crate::gui::platform::{extract_parent_handle, make_parent_window_from_usize};
-
-#[cfg(not(feature = "resize"))]
-use crate::gui::platform::ClapParentWindow;
 
 pub static GUI_EXT: clap_plugin_gui_t = clap_plugin_gui {
     is_api_supported: Some(is_api_supported),
@@ -150,10 +144,6 @@ pub unsafe extern "C" fn can_resize(plugin: *const clap_plugin_t) -> bool {
     let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
     main_thread.assert_main_thread();
 
-    #[cfg(feature = "resize")]
-    return true;
-
-    #[cfg(not(feature = "resize"))]
     false
 }
 
@@ -164,22 +154,9 @@ pub unsafe extern "C" fn get_resize_hints(plugin: *const clap_plugin_t, hints: *
     let main_thread = plugin_ref.main_thread.as_ref().expect("Main Thread not initialized");
     main_thread.assert_main_thread();
 
-    #[cfg(not(feature = "resize"))]
-    {
-        let _ = hints;
-        return false;
-    }
+    let _ = hints;
 
-    #[cfg(feature = "resize")]
-    {
-        let h = unsafe { hints.as_mut_unchecked() };
-        h.can_resize_horizontally = true;
-        h.can_resize_vertically = true;
-        h.preserve_aspect_ratio = false;
-        h.aspect_ratio_width = 0;
-        h.aspect_ratio_height = 0;
-        true
-    }
+    false
 }
 
 // [main-thread & !floating]
@@ -199,21 +176,10 @@ pub unsafe extern "C" fn set_parent(plugin: *const clap_plugin_t, window: *const
     let main_thread = plugin_ref.main_thread.as_mut().expect("Main Thread not initialized");
     main_thread.assert_main_thread();
 
-    #[cfg(feature = "resize")]
-    {
-        main_thread.gui_parent = unsafe { extract_parent_handle(window) };
-    }
-
     let host_addr = plugin_ref.host as usize;
 
-    #[cfg(feature = "resize")]
-    open_window(main_thread, host_addr);
-
-    #[cfg(not(feature = "resize"))]
-    {
-        let raw_parent = unsafe { crate::gui::platform::make_parent_window(window) };
-        open_window_with_parent(main_thread, raw_parent, host_addr);
-    }
+    let raw_parent = unsafe { crate::gui::platform::make_parent_window(window) };
+    open_window_with_parent(main_thread, raw_parent, host_addr);
 
     true
 }
@@ -227,52 +193,9 @@ pub unsafe extern "C" fn set_size(plugin: *const clap_plugin_t, width: u32, heig
     main_thread.gui_width = width;
     main_thread.gui_height = height;
 
-    #[cfg(feature = "resize")]
-    if main_thread.gui_window.is_some() && main_thread.gui_parent != 0 {
-        main_thread.gui_needs_reopen = true;
-        // request_callback schedules on_main_thread — reopen happens there
-        if let Some(request_callback) = unsafe { *plugin_ref.host }.request_callback {
-            unsafe { request_callback(plugin_ref.host) };
-        }
-    }
-
     true
 }
 
-#[cfg(feature = "resize")]
-pub fn open_window(main_thread: &mut MainThreadState, host_addr: usize) {
-    let raw_parent = unsafe { make_parent_window_from_usize(main_thread.gui_parent) };
-
-    let width = main_thread.gui_width;
-    let height = main_thread.gui_height;
-    let params_snapshot = Arc::clone(&main_thread.param_snapshot);
-    let gui_shared = Arc::clone(&main_thread.gui_shared);
-    let gui_requests = main_thread.gui_requests.new_sender();
-
-    let handle = Window::open_parented(
-        &raw_parent,
-        WindowOpenOptions {
-            title: "Neural Amp Modeler".to_string(),
-            size: Size::new(width as f64, height as f64),
-            scale: WindowScalePolicy::SystemScaleFactor,
-        },
-        move |window| {
-            WindowHandler::new(
-                window,
-                width,
-                height,
-                host_addr as *const clap_host_t,
-                gui_shared,
-                gui_requests,
-                params_snapshot,
-            )
-        },
-    );
-
-    main_thread.gui_window = Some(handle);
-}
-
-#[cfg(not(feature = "resize"))]
 pub fn open_window_with_parent(main_thread: &mut MainThreadState, raw_parent: ClapParentWindow, host_addr: usize) {
     let width = main_thread.gui_width;
     let height = main_thread.gui_height;

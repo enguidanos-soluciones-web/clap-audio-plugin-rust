@@ -27,9 +27,11 @@ unsafe extern "C" {
 #[cfg(target_os = "macos")]
 #[allow(unexpected_cfgs)]
 pub fn set_window_background_color(window: &baseview::Window) {
-    use objc::{msg_send, sel, sel_impl, runtime::Object};
+    use objc::{msg_send, runtime::Object, sel, sel_impl};
 
-    let RawWindowHandle::AppKit(handle) = window.raw_window_handle() else { return };
+    let RawWindowHandle::AppKit(handle) = window.raw_window_handle() else {
+        return;
+    };
 
     unsafe {
         let ns_view = handle.ns_view as *mut Object;
@@ -37,7 +39,9 @@ pub fn set_window_background_color(window: &baseview::Window) {
         let _: () = msg_send![ns_view, setWantsLayer: true];
 
         let layer: *mut Object = msg_send![ns_view, layer];
-        if layer.is_null() { return; }
+        if layer.is_null() {
+            return;
+        }
 
         // #1c1c1e → rgb(28, 28, 30)
         let color = CGColorCreateSRGB(28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0);
@@ -49,7 +53,7 @@ pub fn set_window_background_color(window: &baseview::Window) {
 #[cfg(not(target_os = "macos"))]
 pub fn set_window_background_color(_window: &baseview::Window) {}
 
-#[cfg(all(not(feature = "resize"), target_os = "macos"))]
+#[cfg(target_os = "macos")]
 pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> ClapParentWindow {
     use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
     let ns_view = unsafe { (*window).__bindgen_anon_1.cocoa };
@@ -61,7 +65,7 @@ pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> C
     }
 }
 
-#[cfg(all(not(feature = "resize"), target_os = "linux"))]
+#[cfg(target_os = "linux")]
 pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> ClapParentWindow {
     use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle};
     let xid = unsafe { (*window).__bindgen_anon_1.x11 };
@@ -73,7 +77,7 @@ pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> C
     }
 }
 
-#[cfg(all(not(feature = "resize"), target_os = "windows"))]
+#[cfg(target_os = "windows")]
 pub unsafe fn make_parent_window(window: *const crate::clap::clap_window_t) -> ClapParentWindow {
     use raw_window_handle::{Win32WindowHandle, WindowsDisplayHandle};
     let hwnd = unsafe { (*window).__bindgen_anon_1.win32 };
@@ -102,57 +106,6 @@ pub fn to_wgpu_window_handle(h: RawWindowHandle) -> wgpu::rwh::RawWindowHandle {
             rwh6::RawWindowHandle::Win32(rwh6::Win32WindowHandle::new(hwnd))
         }
         _ => panic!("unsupported window handle type"),
-    }
-}
-
-/// Extracts the platform-specific parent window handle as a usize for storage.
-#[cfg(all(feature = "resize", target_os = "macos"))]
-pub unsafe fn extract_parent_handle(window: *const crate::clap::clap_window_t) -> usize {
-    unsafe { (*window).__bindgen_anon_1.cocoa as usize }
-}
-
-#[cfg(all(feature = "resize", target_os = "linux"))]
-pub unsafe fn extract_parent_handle(window: *const crate::clap::clap_window_t) -> usize {
-    unsafe { (*window).__bindgen_anon_1.x11 as usize }
-}
-
-#[cfg(all(feature = "resize", target_os = "windows"))]
-pub unsafe fn extract_parent_handle(window: *const crate::clap::clap_window_t) -> usize {
-    unsafe { (*window).__bindgen_anon_1.win32 as usize }
-}
-
-/// Reconstructs a ClapParentWindow from a stored handle usize.
-#[cfg(all(feature = "resize", target_os = "macos"))]
-pub unsafe fn make_parent_window_from_usize(handle: usize) -> ClapParentWindow {
-    use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
-    let mut wh = AppKitWindowHandle::empty();
-    wh.ns_view = handle as *mut std::ffi::c_void;
-    ClapParentWindow {
-        raw_window: RawWindowHandle::AppKit(wh),
-        raw_display: RawDisplayHandle::AppKit(AppKitDisplayHandle::empty()),
-    }
-}
-
-#[cfg(all(feature = "resize", target_os = "linux"))]
-pub unsafe fn make_parent_window_from_usize(handle: usize) -> ClapParentWindow {
-    use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle};
-    let mut wh = XlibWindowHandle::empty();
-    wh.window = handle as _;
-    ClapParentWindow {
-        raw_window: RawWindowHandle::Xlib(wh),
-        raw_display: RawDisplayHandle::Xlib(XlibDisplayHandle::empty()),
-    }
-}
-
-#[cfg(all(feature = "resize", target_os = "windows"))]
-pub unsafe fn make_parent_window_from_usize(handle: usize) -> ClapParentWindow {
-    use raw_window_handle::{Win32WindowHandle, WindowsDisplayHandle};
-    use std::num::NonZeroIsize;
-    let mut wh = Win32WindowHandle::empty();
-    wh.hwnd = NonZeroIsize::new(handle as isize).expect("null HWND").into();
-    ClapParentWindow {
-        raw_window: RawWindowHandle::Win32(wh),
-        raw_display: RawDisplayHandle::Windows(WindowsDisplayHandle::empty()),
     }
 }
 
